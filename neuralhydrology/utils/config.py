@@ -544,6 +544,10 @@ class Config(object):
         return self._get_value_verbose("model")
 
     @property
+    def model_description(self) -> str:
+        return self._get_value_verbose("model_description")
+
+    @property
     def n_distributions(self) -> int:
         return self._get_value_verbose("n_distributions")
 

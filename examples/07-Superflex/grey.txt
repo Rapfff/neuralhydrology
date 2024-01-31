@@ -1,0 +1,45 @@
+Inputs
+	static_input
+	precip
+	tmin
+	tmax
+	evap
+
+Nodes
+	s 		: SnowReservoir
+	c		: CatFunction
+	p[3]  	: FluxPartition
+	t[2] 	: ThresholdReservoir
+	r[3] 	: RoutingReservoir
+	lf 		: LagFunction(6)
+
+Edges
+	Inputs[static_input] - (static_input) - s
+	Inputs[precip] - (precip) - s
+	Inputs[tmin] - (tmin) - s
+	Inputs[tmax] - (tmax) - s
+	Inputs[precip] - c
+	Inputs[tmin] - c
+	Inputs[tmax] - c
+	Inputs[evap] - c
+	s[snowmelt] - (flux) - p1
+	Inputs[static_input] - (static_input) - p1
+	s[miss_flux] - (flux) - p2
+	Inputs[static_input] - (static_input) - p2
+	Inputs[evap] - (flux) - p3
+	Inputs[static_input] - (static_input) - p3
+	p1 - (x_in)  - t1
+	p1 - (x_in)  - t2
+	p2 - (x_in)  - t1
+	p2 - (x_in)  - t2
+	p3 - (x_out) - t1
+	p3 - (x_out) - t2
+	t1 - r1
+	t2 - r1
+	r1 - r2
+	r2 - r3
+	r3 - lf
+	c - (x) - p1
+	c - (x) - p2
+	c - (x) - p3
+	

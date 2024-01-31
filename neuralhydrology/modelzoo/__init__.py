@@ -15,6 +15,7 @@ from neuralhydrology.modelzoo.multihead_forecast_lstm import MultiHeadForecastLS
 from neuralhydrology.modelzoo.odelstm import ODELSTM
 from neuralhydrology.modelzoo.sequential_forecast_lstm import SequentialForecastLSTM
 from neuralhydrology.modelzoo.stacked_forecast_lstm import StackedForecastLSTM
+from neuralhydrology.modelzoo.superflex import SuperFlex
 from neuralhydrology.modelzoo.transformer import Transformer
 from neuralhydrology.utils.config import Config
 
@@ -33,6 +34,7 @@ SINGLE_FREQ_MODELS = [
     "stacked_forecast_lstm"
 ]
 AUTOREGRESSIVE_MODELS = ['arlstm']
+CONSERVATION_MODELS = ["superflex"]
 
 
 def get_model(cfg: Config) -> nn.Module:
@@ -54,7 +56,7 @@ def get_model(cfg: Config) -> nn.Module:
     if cfg.model.lower() not in AUTOREGRESSIVE_MODELS and cfg.autoregressive_inputs:
         raise ValueError(f"Model {cfg.model} does not support autoregression.")
 
-    if cfg.model.lower() != "mclstm" and cfg.mass_inputs:
+    if cfg.model.lower() != "mclstm" and cfg.model.lower() not in CONSERVATION_MODELS and cfg.mass_inputs:
         raise ValueError(f"The use of 'mass_inputs' with {cfg.model} is not supported.")
 
     if cfg.model.lower() == "arlstm":
@@ -80,6 +82,8 @@ def get_model(cfg: Config) -> nn.Module:
         model = ODELSTM(cfg=cfg)
     elif cfg.model.lower() == "mclstm":
         model = MCLSTM(cfg=cfg)
+    elif cfg.model.lower() == "superflex":
+        model = SuperFlex(cfg=cfg)
     elif cfg.model.lower() == "transformer":
         model = Transformer(cfg=cfg)
     elif cfg.model.lower() == "handoff_forecast_lstm":

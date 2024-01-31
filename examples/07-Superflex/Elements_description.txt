@@ -1,0 +1,184 @@
+==================
+ThresholdReservoir
+==================
+
+A threshold bucket is a bucket with finite height and no drain.
+Outflow is from overflow.
+
+Input
+-----
+	x_in  : Incoming flux (eg. precipitation, or output from another reservoir)
+	x_out : Missed flux (typically evapotranspiration)
+
+Output
+------
+	overflow
+
+Parameter
+---------
+	height : positive real number
+
+Implementation
+--------------
+	storage = storage + x_in
+	storage = max(storage - x_out,  0)
+	overflow  = max(storage - height, 0)
+	storage = storage - overflow
+
+
+================
+RoutingReservoir
+================
+
+A routing bucket is a bucket with infinite height and a drain.
+
+Input
+-----
+	x_in : Incoming flux (e.g. precipitation, or output from another reservoir)
+
+Output
+------
+	outflow
+
+Parameter
+---------
+	rate : strictly positive real number
+
+Implementation
+--------------
+	storage = storage + x_in
+	outflow  = rate * storage
+	storage = storage - outflow
+
+
+=============
+SnowReservoir
+=============
+
+A snow bucket is a bucket with infinite height and a drain, where the input is
+partitioned into one flux that goes into the bucket and one flux that misses
+the bucket.
+
+Input
+-----
+	static_input : The static inputs for the whole model
+	precip       : The precipitation
+	tmin         : The minimal temperature
+	tmax         : The maximal temperature
+
+Output
+------
+	miss_flux
+	snowmelt
+
+Parameter
+---------
+	rate : strictly positive real number
+
+Implementation
+--------------
+	miss_flux, in_flux = partition(x=[x_s, tmin, tmax, precip], flux=precip)
+	storage = storage + in_flux
+	snowmelt = rate * storage
+	storage = storage - snowmelt
+
+
+=============
+FluxPartition
+=============
+
+Fully connected layer with N normalized outputs.
+
+Input
+-----
+	x            : Values from which the weights are computed
+	static_input : Static inputs used in addition to x
+	flux         : Flux to partition
+
+Output
+------
+	output
+
+Implementation
+--------------
+	weights = normalize(sigmoid(x))
+	output = weights * flux
+
+
+=============
+LagFunction
+=============
+
+A generic lag function as a convolution.
+
+Input
+-----
+	x_in : incoming flux
+
+Output
+------
+	output
+
+Parameter
+---------
+	weights
+
+Implementation
+--------------
+	storage[0] = x_in * weights #add new value
+	output = storage[-1]        #get output
+	storage[1:] = storage[:-1]  #shift
+
+
+===========
+CatFunction
+===========
+
+Returns a concatenatation everything it receives on input.
+
+Input
+-----
+	x : incoming fluxes
+
+Output
+------
+	output
+
+
+===========
+Transparent
+===========
+
+Returns a sum of everything it receives on input.
+Every element sums what they receive on each input channel, but this one does
+nothing apart from that. Can be useful as a final output node, to combine
+everything.
+
+Input
+-----
+	x : incoming fluxes
+
+Output
+------
+	output
+
+
+========
+Splitter
+========
+
+Split the incoming flux into the outgoing connections.
+Similar to FluxPartition, but the weights doesn't depend on anything.
+The weights are optimized by backpropagation.
+
+Input
+-----
+	x : Incoming flux
+Output
+------
+	output
+
+Implementation
+--------------
+	weights = torch.softmax(self.weights, dim=0)
+	output = x * weights
