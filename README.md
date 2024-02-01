@@ -1,7 +1,7 @@
 ![#](docs/source/_static/img/neural-hyd-logo-black.png)
 
 # SUPERFLEX MODEL
-All the changes are in [superflex.py](neuralhydrology\modelzoo\superflex.py) and in the folder [examples/07 - Superflex](examples/07-Superflex/) 
+All the changes are in [superflex.py](neuralhydrology/modelzoo/superflex.py) and in the folder [examples/07 - Superflex](examples/07-Superflex/) 
 
 Python library to train neural networks with a strong focus on hydrological applications.
 
