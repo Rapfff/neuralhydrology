@@ -80,8 +80,9 @@ class _DirectedLabelledGraph:
     def add_connection(self, output_node, output_data, input_node, input_data):
         output_node_idx = self.find_node(output_node)
         input_node_idx  = self.find_node(input_node )
+        data_size = self.nodes[output_node_idx].output_size
         output_data = self.nodes[output_node_idx].add_output(input_node_idx, output_data)
-        self.nodes[input_node_idx].add_input(input_data, output_node_idx, output_data)
+        self.nodes[input_node_idx].add_input(input_data, output_node_idx, output_data, data_size)
     
     def check(self):
         # 1 - check completness
@@ -162,6 +163,7 @@ class _Node:
         self.sons = []
         self.nb_parameters = ELEMENTS_NB_PARMETERS[type_node]
         self.layer = -1
+        self.output_size = 1
 
     def __repr__(self) -> str:
         return self.name
@@ -181,7 +183,7 @@ class _Node:
             self.sons.append(son_node)
         return data
     
-    def add_input(self,input_data, father_node, father_data):
+    def add_input(self,input_data, father_node, father_data, data_size=1):
         if not input_data:
             if len(self.inputs.keys()) == 1:
                 input_data = next(iter(self.inputs))
@@ -202,26 +204,26 @@ class _RoutingNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return RoutingReservoir(cfg)
+        return _RoutingReservoir(cfg)
     
 class _ThresholdNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return ThresholdReservoir(cfg)
+        return _ThresholdReservoir(cfg)
     
 class _SnowNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return SnowReservoir(cfg)
+        return _SnowReservoir(cfg)
     
 class _FluxNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, static_input_size):
         num_inputs = static_input_size + 4 #TODO replace 4 by dynamic value
-        return FluxPartition(cfg, num_inputs=num_inputs, num_outputs=len(self.sons), activation='sigmoid')
+        return _FluxPartition(cfg, num_inputs=num_inputs, num_outputs=len(self.sons), activation='sigmoid')
     def add_output(self, son_node, data):
         data = len(self.sons)
         if not son_node in self.sons:
@@ -236,7 +238,7 @@ class _LagNode(_Node):
         self.nb_parameters = time_steps
         self.time_steps = time_steps
     def return_instance(self, cfg, *args):
-        return LagFunction(cfg,self.time_steps)
+        return _LagFunction(cfg,self.time_steps)
 
 class _InputNode(_Node):
     def __init__(self,name, type_node,outputs) -> None:
@@ -249,26 +251,63 @@ class _CatNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return CatFunction(cfg)
+        return _CatFunction(cfg)
+    def add_input(self,input_data, father_node, father_data, data_size=1):
+        super().add_input(input_data, father_node, father_data, data_size)
+        self.output_size += data_size
 
 class _TransparentNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return Transparent(cfg)
+        return _Transparent(cfg)
 
 class _SplitterNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
     def return_instance(self, cfg, *args):
-        return Splitter(cfg, num_outputs=len(self.sons))
+        return _Splitter(cfg, num_outputs=len(self.sons))
     def add_output(self, son_node, data) -> int:
         data = len(self.sons)
         if not son_node in self.sons:
             self.sons.append(son_node)
         return data
 
-def parser(input_file,cfg,statics_input_size):
+def parser(input_file,cfg,statics_input_size: int) -> Tuple:
+    """
+    Parse the model description file.
+
+    Parameters
+    ----------
+    input_file: _io.TextIOWrapper
+        The model description file.
+        input_file = open(<nameofthefile>,'r')
+    
+    cfg: Config
+        The run configuration
+    
+    statics_input_size : int
+        sum of the length of the static inputs.
+
+    Returns
+    -------
+        Tuple
+            A tuple containing five elements:
+                - layers: a list of lists of tuples containing one element (SnowReservoir, Splitter... instance) and an int
+                          layers[i][j][0] contains the element instance of the jth node in the ith layer
+                          layers[i][j][0] contains the index of the jth node in the ith layer. This index will be used in
+                          nodes_inputs and nodes_outputs just below.
+                - nodes_inputs: a list of lists of lists of tuples containing two integers
+                                nodes_inputs[i][j] = [(3,0),(4,1)] => the the jth inputs of the ith nodes is a
+                                                                      combination of the 3rd node first input and
+                                                                      4th node 2nd input.
+                - nodes_outputs: list of lists of None
+                                 nodes_inputs[i][j] will contain the jth output of the ith node. Initialized at None.
+                - total_parameters: int
+                                    total number of model parameter to optimized.
+                - inputs: list of strings
+                          contains the ordered list of inputs names.
+    """
     categories = ["Inputs","Nodes","Edges"]
     graph = _DirectedLabelledGraph()
     input_names = []
@@ -299,7 +338,7 @@ def parser(input_file,cfg,statics_input_size):
         pattern = r'(\w+)(\[\d+\])'
         match = re.search(pattern, name)
         names = [name]
-        if match:
+        if match: # line of form  "name[x] : typenode"
             name = match.group(1)
             number = int(match.group(2)[1:-1])
             names = [name+str(i+1) for i in range(number)]
@@ -308,7 +347,7 @@ def parser(input_file,cfg,statics_input_size):
         pattern = r'(\w+)(\(\d+\))'
         match = re.search(pattern, typ)
         param = None
-        if match:
+        if match: # line of form "name : typenode(x)"
             typ = match.group(1)
             param = int(match.group(2)[1:-1])
         
@@ -320,14 +359,17 @@ def parser(input_file,cfg,statics_input_size):
         line = line.split('-')
         f = line[0]
         to = len(line)-1
+        # if line of form "from - (input_type) - to" => input_data = 1
+        # if line of form "from - to" => input_data = False
         input_data = 1 if to == 2 else False
         if input_data:
             input_data = line[input_data][1:-1]
         to = line[to]
 
-        
         pattern = r'(\w+)(\[\w+\])'
         match = re.search(pattern, f)
+        # if line of form "from[smth] - to" => output_data = smth
+        # if line of form "from - to" => output_data = False
         if match:
             f = match.group(1)
             output_data = match.group(2)[1:-1]
@@ -341,8 +383,10 @@ def parser(input_file,cfg,statics_input_size):
 
         if not is_empty_line(line):
             cat = is_category(line, categories)
-            if cat:
+            if cat: # changing category
                 if status == 'I':
+                    # if the current category is Input we must the first
+                    # node in the graph that represents the inputs.
                     graph.add_node('Inputs','Inputs',outputs=input_names)
                 status = line[0]
                 categories = categories[1:]
@@ -361,17 +405,29 @@ def parser(input_file,cfg,statics_input_size):
     layers, nodes_inputs, nodes_outputs, total_parameters = graph.export(cfg, statics_input_size)
     return layers, nodes_inputs, nodes_outputs, total_parameters, input_names
 
-class SuperFlex(BaseModel):
-    """..."""
+class Superflex(BaseModel):
+    """Superflex model class.
+
+    This class allows the user to create a model similar to a SuperflexPy unit.
+    A SuperflexPy unit is a collection of multiple connected elements (reservoirs, lag functions, splitters,...).
+    A unit can be used to represent a lumped catchment model.
+    The structure of the unit is described into file. The path to this file must be given in the 'model_description'
+    field of the configuration file.
+
+    Parameters
+    ----------
+    cfg : Config
+        The run configuration.
+    """
 
     def __init__(
         self,
         cfg: Config
     ):
-        super(SuperFlex, self).__init__(cfg=cfg)
+        super(Superflex, self).__init__(cfg=cfg)
 
         if len(cfg.target_variables) > 1:
-            raise ValueError("Currently, bucket models only support a single target variable.")
+            raise ValueError("Currently, superflex models only support a single target variable.")
 
         self._n_mass_vars = len(cfg.mass_inputs)
 
@@ -385,7 +441,7 @@ class SuperFlex(BaseModel):
 
         self.embedding_net = InputLayer(cfg)
 
-        # Build the parameterization network. This takes static catchment attributes as inputs and estiamtes
+        # Build the parameterization network. This takes static catchment attributes as inputs and estimates
         # all of the parameters for all of the different model components at once. Parameters will be extracted
         # from the output vector of this model sequentially.
         statics_input_size = len(cfg.static_attributes + cfg.hydroatlas_attributes + cfg.evolving_attributes)
@@ -393,17 +449,37 @@ class SuperFlex(BaseModel):
         if cfg.use_basin_id_encoding:
             statics_input_size += cfg.number_of_basins
 
+        if cfg.model_description is None:
+            raise ValueError("The model desctiption file must be provided in the configuration file 'model_description' field.")
+        # Parse the model_description file and check if the model described is valid.
         with open(cfg.model_description,'r') as input_file:
            self.layers, self.nodes_inputs, self.nodes_outputs, total_parameters, self.inputs = parser(input_file, cfg, statics_input_size)
+        # self.layers: list of elements (SnowReservoir, Splitter, LagFunction,etc ... instances)
+        # self.nodes_inputs:  list of list of list of tuples containing two integers
+        #                     self.nodes_inputs[i][j] = [(3,0),(4,1)] => the the jth inputs of the ith nodes is a
+        #                                                               combination of the 3rd node first input and
+        #                                                               4th node 2nd input.
+        # self.nodes_outputs: list of list of None
+        #                     self.nodes_inputs[i][j] will contain the jth output of the ith node. Initialized at None.
+        # total_parameters  : int.
+        #                     total number of model parameter to optimized.
+        # self.inputs       : list of strings
+        #                     contains the ordered list of inputs names.
         
         if statics_input_size == 0:
-            raise ValueError("0 Static input given.")
+            raise ValueError("At least one static input must be provided.") # TODO
         
-        hidden_sizes = [20, total_parameters] # TODO Why 20 ?
+
+        hidden_sizes = cfg.statics_embedding['hiddens']
+        if len(hidden_sizes) == 0:
+            hidden_sizes = [20]
+        hidden_sizes.append(total_parameters)
+        hidden_sizes = [hidden_sizes, total_parameters]
         self.parameterization = FC(
         input_size=statics_input_size,
         hidden_sizes=hidden_sizes,
-        dropout=0.,
+        dropout=cfg.statics_embedding['dropout'],
+        activation=cfg.statics_embedding['activation']
         )
 
     def _execute_graph(
@@ -411,22 +487,31 @@ class SuperFlex(BaseModel):
         parameters: torch.Tensor,
         inputs : list[torch.Tensor]
     ) -> torch.Tensor:
-        """..."""
+        #load the inputs
         self.nodes_outputs[0] = inputs
         parameters_count = 0
+        # for each layer
         for i in range(1,len(self.layers)):
+            # for each node in the layer
             for j in range(len(self.layers[i])):
                 node, node_idx = self.layers[i][j]
                 node_inputs = []
+                # we first deal with the inputs:
+                # for each input of this node
                 for k in self.nodes_inputs[node_idx]:
                     node_inputs.append([])
+                    # add all sources for this input in node_inputs[-1]
                     for l in k:
                         node_inputs[-1].append(self.nodes_outputs[l[0]][l[1]])
-                    if type(node) == CatFunction:
+                    # if the node is a CatFunction the sources are concatenated
+                    if type(node) == _CatFunction:
                         node_inputs[-1] = torch.cat(node_inputs[-1], dim=-1)
+                    # otherwhise they are element-wise sumed 
                     else:
                         stacked_tensor = torch.stack(node_inputs[-1], dim=0)
                         node_inputs[-1] = torch.sum(stacked_tensor, dim=0)
+                
+                # then we deal with the parameters
                 if node.number_of_parameters == 0:
                     p = None
                 elif node.number_of_parameters == 1:
@@ -434,15 +519,33 @@ class SuperFlex(BaseModel):
                 else:
                     p = parameters[:, parameters_count:parameters_count + node.number_of_parameters]
                 parameters_count += node.number_of_parameters
+
+                # finally we execute the node and put the outputs in nodes_outputs
                 self.nodes_outputs[node_idx] = node(inputs=node_inputs,parameters=p)
+
         last_node_idx = self.layers[-1][0][1]
+        # the output of the model is the output of the node in the last layer.
+        # We know that there is exactly one node in the last layer and it has exactly one output:
+        # we have checked it in _DirectedLabelledGraph.export
         return self.nodes_outputs[last_node_idx][0]
 
     def forward(
         self,
         data: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """..."""
+        """Perform a forward pass on the Superflex model.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Dictionary, containing input features as key-value pairs.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Model outputs.
+                - `y_hat`: model predictions of shape [batch size, sequence length, number of target variables].
+        """
         # Prepare inputs through any universal embedding layer that might exist.
         # Since we don't allow embedding transforms in the current version, really
         # all this is doing is separating the dynamic and static inputs in a
@@ -476,7 +579,7 @@ class SuperFlex(BaseModel):
             )
         return {'y_hat': torch.stack(output, 1)}
 
-class RoutingReservoir(torch.nn.Module):
+class _RoutingReservoir(torch.nn.Module):
     """Initialize a routing bucket node.
 
     A routing bucket is a bucket with infinite height and a drain.
@@ -496,7 +599,7 @@ class RoutingReservoir(torch.nn.Module):
         self,
         cfg: Config
     ):
-        super(RoutingReservoir, self).__init__()
+        super(_RoutingReservoir, self).__init__()
         self.number_of_parameters = 1
 
     def initialize_bucket(
@@ -506,8 +609,8 @@ class RoutingReservoir(torch.nn.Module):
     ) -> torch.Tensor:
         """Initializes a bucket during runtime.
         
-        Initialization must happen at runtime so that we know the batch size and device.
         """
+        # Initialization must happen at runtime so that we know the batch size and device.
         # We can do this however we want, but for now let's just start with every bucket being empty.
         self.storage = torch.zeros([batch_size,1], device=device)
 
@@ -530,7 +633,7 @@ class RoutingReservoir(torch.nn.Module):
         self.storage = self.storage - outflow
         return [outflow]
 
-class SnowReservoir(torch.nn.Module):
+class _SnowReservoir(torch.nn.Module):
     """Initialize a snow bucket node.
 
     A snow bucket is a bucket with infinite height and a drain, where the input is partitioned
@@ -550,7 +653,7 @@ class SnowReservoir(torch.nn.Module):
         self,
         cfg: Config
     ):
-        super(SnowReservoir, self).__init__()
+        super(_SnowReservoir, self).__init__()
         self.number_of_parameters = 1
 
         # Network for converting temperature, precip, and static attributes into a partitioning
@@ -559,7 +662,7 @@ class SnowReservoir(torch.nn.Module):
         if cfg.use_basin_id_encoding:
             statics_input_size += cfg.number_of_basins
 
-        self.precip_partitioning = FluxPartition(
+        self.precip_partitioning = _FluxPartition(
             cfg=cfg,
             num_inputs=3+statics_input_size,
             num_outputs=2,
@@ -598,7 +701,7 @@ class SnowReservoir(torch.nn.Module):
         self.storage = self.storage.clone() - snowmelt
         return [miss_flux, snowmelt]
     
-class LagFunction(torch.nn.Module):
+class _LagFunction(torch.nn.Module):
     """Initialize a lag function.
 
     A generic lag function as a convolution. We use a storage vector to make this easy to plug into
@@ -616,7 +719,7 @@ class LagFunction(torch.nn.Module):
         cfg: Config,
         timesteps: int
     ):
-        super(LagFunction, self).__init__()
+        super(_LagFunction, self).__init__()
         # The number of timesteps in a lag function must be set.
         self.timesteps = timesteps
         self.number_of_parameters = timesteps
@@ -655,7 +758,7 @@ class LagFunction(torch.nn.Module):
         self.storage[:, 0] = self.storage.new_zeros([self.storage.shape[0]])
         return [outflow]
 
-class FluxPartition(torch.nn.Module):
+class _FluxPartition(torch.nn.Module):
     """Fully connected layer with N normalized outputs.
 
     Parameters
@@ -678,7 +781,7 @@ class FluxPartition(torch.nn.Module):
         num_outputs: int,
         activation: str = 'sigmoid'
     ):
-        super(FluxPartition, self).__init__()
+        super(_FluxPartition, self).__init__()
         
         self.fc = torch.nn.Linear(in_features=num_inputs, out_features=num_outputs)
         self.number_of_parameters = 0
@@ -725,7 +828,7 @@ class FluxPartition(torch.nn.Module):
         outputs = torch.split(outputs, 1, dim=1)
         return outputs
 
-class ThresholdReservoir(torch.nn.Module):
+class _ThresholdReservoir(torch.nn.Module):
     """Initialize a threshold bucket node.
 
     A threshold bucket is a bucket with finite height and no drain. Outflow is from overflow.
@@ -745,7 +848,7 @@ class ThresholdReservoir(torch.nn.Module):
         self,
         cfg: Config
     ):
-        super(ThresholdReservoir, self).__init__()
+        super(_ThresholdReservoir, self).__init__()
         self.number_of_parameters = 1
 
     def initialize_bucket(
@@ -781,13 +884,13 @@ class ThresholdReservoir(torch.nn.Module):
         self.storage = self.storage.clone() - overflow
         return [overflow]
 
-class CatFunction(torch.nn.Module):
+class _CatFunction(torch.nn.Module):
 
     def __init__(
         self,
         cfg: Config
     ):
-        super(CatFunction, self).__init__()
+        super(_CatFunction, self).__init__()
         self.number_of_parameters = 0
 
     def initialize_bucket(
@@ -804,13 +907,13 @@ class CatFunction(torch.nn.Module):
     ) -> list[torch.Tensor]:
         return inputs
 
-class Transparent(torch.nn.Module):
+class _Transparent(torch.nn.Module):
 
     def __init__(
         self,
         cfg: Config
     ):
-        super(Transparent, self).__init__()
+        super(_Transparent, self).__init__()
         self.number_of_parameters = 0
 
     def initialize_bucket(
@@ -827,7 +930,7 @@ class Transparent(torch.nn.Module):
     ) -> list[torch.Tensor]:
         return inputs
 
-class Splitter(torch.nn.Module):
+class _Splitter(torch.nn.Module):
     """Fully connected layer with N normalized outputs.
 
     Parameters
@@ -842,7 +945,7 @@ class Splitter(torch.nn.Module):
         cfg: Config,
         num_outputs: int
     ):
-        super(Splitter, self).__init__()
+        super(_Splitter, self).__init__()
         self.weights = torch.nn.Parameter(torch.randn(num_outputs, requires_grad=True))
         self.number_of_parameters = 0
         self._reset_parameters()

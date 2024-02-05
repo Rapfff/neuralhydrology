@@ -15,7 +15,7 @@ from neuralhydrology.modelzoo.multihead_forecast_lstm import MultiHeadForecastLS
 from neuralhydrology.modelzoo.odelstm import ODELSTM
 from neuralhydrology.modelzoo.sequential_forecast_lstm import SequentialForecastLSTM
 from neuralhydrology.modelzoo.stacked_forecast_lstm import StackedForecastLSTM
-from neuralhydrology.modelzoo.superflex import SuperFlex
+from neuralhydrology.modelzoo.superflex import Superflex
 from neuralhydrology.modelzoo.transformer import Transformer
 from neuralhydrology.utils.config import Config
 
@@ -83,7 +83,7 @@ def get_model(cfg: Config) -> nn.Module:
     elif cfg.model.lower() == "mclstm":
         model = MCLSTM(cfg=cfg)
     elif cfg.model.lower() == "superflex":
-        model = SuperFlex(cfg=cfg)
+        model = Superflex(cfg=cfg)
     elif cfg.model.lower() == "transformer":
         model = Transformer(cfg=cfg)
     elif cfg.model.lower() == "handoff_forecast_lstm":

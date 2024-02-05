@@ -56,6 +56,10 @@ metrics:
 # (has to match the if statement in modelzoo/__init__.py)
 model: cudalstm
 
+# file containing the structure of the SuperflexPy unit to model
+# (only for Superlfex model)
+model_description: 
+
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
 
