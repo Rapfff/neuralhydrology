@@ -92,7 +92,6 @@ Fully connected layer with N normalized outputs.
 Input
 -----
 	x            : Values from which the weights are computed
-	static_input : Static inputs used in addition to x
 	flux         : Flux to partition
 
 Output

@@ -18,18 +18,16 @@ Edges
 	Inputs[precip] - (precip) - s
 	Inputs[tmin] - (tmin) - s
 	Inputs[tmax] - (tmax) - s
+	Inputs[static_input] - c
 	Inputs[precip] - c
 	Inputs[tmin] - c
 	Inputs[tmax] - c
 	Inputs[evap] - c
 	s[snowmelt] - (flux) - p1
-	Inputs[static_input] - (static_input) - p1
 	c - (x) - p1
 	s[miss_flux] - (flux) - p2
-	Inputs[static_input] - (static_input) - p2
 	c - (x) - p2
 	Inputs[evap] - (flux) - p3
-	Inputs[static_input] - (static_input) - p3
 	c - (x) - p3
 	p1 - (x_in)  - t1
 	p1 - (x_in)  - t2
@@ -42,7 +40,4 @@ Edges
 	r1 - r2
 	r2 - r3
 	r3 - lf
-	c - (x) - p1
-	c - (x) - p2
-	c - (x) - p3
 	

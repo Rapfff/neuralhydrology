@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Any, Tuple
 import re 
 
 import torch
@@ -7,10 +7,10 @@ from neuralhydrology.utils.config import Config
 from neuralhydrology.modelzoo.fc import FC
 from neuralhydrology.modelzoo.inputlayer import InputLayer
 
-ELEMENTS_INPUTS = {'SnowReservoir': ['static_input', 'precip','tmin','tmax'],
+ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
                    'ThresholdReservoir': ['x_in','x_out'],
                    'RoutingReservoir':['x_in'],
-                   'FluxPartition':['flux','x','static_input'],
+                   'FluxPartition':['flux','x'],
                    'LagFunction':['x_in'],
                    'Inputs':[],
                    'CatFunction':['x'],
@@ -46,7 +46,7 @@ class _DirectedLabelledGraph:
             res += str(i)+' '+str(n)+'\n'
         return res
 
-    def add_node(self,name,type_node,param=False,outputs=None):
+    def add_node(self,name,type_node,param=False,outputs=None,static_inputs_size=None):
         if self.find_node(name) != None:
             raise ValueError(name+' declared multiple times.')
         if type_node == 'SnowReservoir':
@@ -60,7 +60,7 @@ class _DirectedLabelledGraph:
         elif type_node == 'LagFunction':
             n = _LagNode(name,type_node,param)
         elif type_node == 'Inputs':
-            n = _InputNode(name,type_node,outputs)
+            n = _InputNode(name,type_node,outputs,static_inputs_size)
         elif type_node == 'CatFunction':
             n = _CatNode(name,type_node)
         elif type_node == 'Transparent':
@@ -77,11 +77,16 @@ class _DirectedLabelledGraph:
                 return i
         return None
     
-    def add_connection(self, output_node, output_data, input_node, input_data):
+    def add_connection(self, output_node : str, output_data: str, input_node: str, input_data:str):
+        error_msg = f'Cannot add an edge between {output_node} and {input_node}:'
         output_node_idx = self.find_node(output_node)
+        if output_node_idx is None:
+            raise SyntaxError(error_msg + f'{output_node} not declared.')
         input_node_idx  = self.find_node(input_node )
-        data_size = self.nodes[output_node_idx].output_size
+        if input_node_idx is None:
+            raise SyntaxError(error_msg + f'{output_node} not declared.')
         output_data = self.nodes[output_node_idx].add_output(input_node_idx, output_data)
+        data_size = self.nodes[output_node_idx].outputs_sizes[output_data]
         self.nodes[input_node_idx].add_input(input_data, output_node_idx, output_data, data_size)
     
     def check(self):
@@ -105,7 +110,7 @@ class _DirectedLabelledGraph:
                     son.set_layer(max(son.layer, node.layer+1))
                     queue.append(son)
 
-    def export(self, cfg, statics_input_size):
+    def export(self, cfg):
         self.compute_layers()
         sorted_nodes = sorted(self.nodes, key=lambda node: node.layer)
         layers = [] #list of list of nodes
@@ -119,7 +124,7 @@ class _DirectedLabelledGraph:
                 c+=1
                 layers.append([])
             node_idx = self.find_node(n.name)
-            layers[-1].append((n.return_instance(cfg, statics_input_size),node_idx))
+            layers[-1].append((n.return_instance(cfg),node_idx))
 
             nodes_inputs[node_idx] = []
             for input_type in ELEMENTS_INPUTS[n.type_node]:
@@ -163,7 +168,7 @@ class _Node:
         self.sons = []
         self.nb_parameters = ELEMENTS_NB_PARMETERS[type_node]
         self.layer = -1
-        self.output_size = 1
+        self.outputs_sizes = [0 for _ in ELEMENTS_OUTPUTS[type_node]]
 
     def __repr__(self) -> str:
         return self.name
@@ -183,13 +188,14 @@ class _Node:
             self.sons.append(son_node)
         return data
     
-    def add_input(self,input_data, father_node, father_data, data_size=1):
+    def add_input(self,input_data, father_node, father_data):
         if not input_data:
             if len(self.inputs.keys()) == 1:
                 input_data = next(iter(self.inputs))
             else:
                 raise ValueError(self.name+ " has several inputs and none was specified.")
         self.inputs[input_data].append((father_node,father_data))
+        return input_data
     
     def is_complete(self):
         for i in self.inputs:
@@ -203,32 +209,58 @@ class _Node:
 class _RoutingNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _RoutingReservoir(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
     
 class _ThresholdNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _ThresholdReservoir(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
     
 class _SnowNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _SnowReservoir(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if input_data == ELEMENTS_INPUTS['SnowReservoir'].index('precip'):
+            if len(self.inputs[input_data]) == 1:
+                self.outputs_sizes[0] = data_size
+                self.outputs_sizes[1] = data_size
     
 class _FluxNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, static_input_size):
-        num_inputs = static_input_size + 4 #TODO replace 4 by dynamic value
-        return _FluxPartition(cfg, num_inputs=num_inputs, num_outputs=len(self.sons), activation='sigmoid')
+        self.input_size_x = 0
+    def return_instance(self, cfg):
+        return _FluxPartition(cfg, num_inputs=self.input_size_x, num_outputs=len(self.sons), activation='sigmoid')
     def add_output(self, son_node, data):
         data = len(self.sons)
         if not son_node in self.sons:
             self.sons.append(son_node)
+            if len(self.outputs_sizes) == 0:
+                self.outputs_sizes.append(None)
+            else:
+                self.outputs_sizes.append(self.outputs_sizes[-1])
         return data
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if input_data == ELEMENTS_INPUTS['FluxPartition'].index('flux'):
+            if len(self.inputs[input_data]) == 1:
+                self.outputs_sizes = [data_size for _ in self.sons]
+        else:
+            if len(self.inputs[input_data]) == 1:
+                self.input_size_x = data_size
 
 class _LagNode(_Node):
     def __init__(self,name, type_node,time_steps) -> None:
@@ -237,43 +269,58 @@ class _LagNode(_Node):
             raise ValueError("A LagFunction must be declared with the number of time_steps (ex.: LagFunction(5)")
         self.nb_parameters = time_steps
         self.time_steps = time_steps
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _LagFunction(cfg,self.time_steps)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
 
 class _InputNode(_Node):
-    def __init__(self,name, type_node,outputs) -> None:
-        super().__init__(name, type_node)
+    def __init__(self,name, type_node,outputs, static_inputs_size) -> None:
         ELEMENTS_OUTPUTS['Inputs'] = outputs
-    def return_instance(self, cfg, *args):
+        super().__init__(name, type_node)
+        self.outputs_sizes = [1 for _ in outputs]
+        self.outputs_sizes[outputs.index('static_inputs')] = static_inputs_size
+    def return_instance(self, cfg):
         return None
 
 class _CatNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _CatFunction(cfg)
-    def add_input(self,input_data, father_node, father_data, data_size=1):
-        super().add_input(input_data, father_node, father_data, data_size)
-        self.output_size += data_size
+    def add_input(self,input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        self.outputs_sizes[0] += data_size
 
 class _TransparentNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _Transparent(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
 
 class _SplitterNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
-    def return_instance(self, cfg, *args):
+    def return_instance(self, cfg):
         return _Splitter(cfg, num_outputs=len(self.sons))
     def add_output(self, son_node, data) -> int:
         data = len(self.sons)
         if not son_node in self.sons:
             self.sons.append(son_node)
+            self.outputs_sizes.append(self.outputs_sizes[-1])
         return data
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if self.inputs[input_data] == 1:
+            self.outputs_sizes = [data_size for _ in self.sons]
 
-def parser(input_file,cfg,statics_input_size: int) -> Tuple:
+def parser(input_file,cfg,static_inputs_size: int) -> Tuple:
     """
     Parse the model description file.
 
@@ -286,7 +333,7 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
     cfg: Config
         The run configuration
     
-    statics_input_size : int
+    static_inputs_size : int
         sum of the length of the static inputs.
 
     Returns
@@ -333,14 +380,20 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
 
     def parse_node(line):
         l = line.split(':')
-
+        if len(l) == 0:
+            raise SyntaxError(f'Line {line_counter}: exepected ":" somewhere in the line, got {original_line}')
+        
         name = remove_blank(l[0])
         pattern = r'(\w+)(\[\d+\])'
         match = re.search(pattern, name)
         names = [name]
         if match: # line of form  "name[x] : typenode"
             name = match.group(1)
-            number = int(match.group(2)[1:-1])
+            try:
+                number = int(match.group(2)[1:-1])
+                assert number > 0
+            except:
+                raise SyntaxError(f'Line {line_counter}: the value between brackets must be a strictly positive integer, got {match.group(2)[1:-1]}')
             names = [name+str(i+1) for i in range(number)]
         
         typ  = remove_blank(l[1])
@@ -349,7 +402,10 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
         param = None
         if match: # line of form "name : typenode(x)"
             typ = match.group(1)
-            param = int(match.group(2)[1:-1])
+            if typ != 'LagFunction':
+                print(f'WARN: line {line_counter}: the value between parenthesis will be ignored, since this node is not a LagFunction.')
+            else:
+                param = int(match.group(2)[1:-1])
         
         for name in names:
             graph.add_node(name, typ, param)
@@ -357,6 +413,8 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
     def parse_edge(line):
         line = remove_blank(line)
         line = line.split('-')
+        if len(line) == 0:
+            raise SyntaxError(f'Line {line_counter}: exepected "-" somewhere in the line, got {original_line}')
         f = line[0]
         to = len(line)-1
         # if line of form "from - (input_type) - to" => input_data = 1
@@ -378,16 +436,19 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
         graph.add_connection(f,output_data,to,input_data)
 
     status = None
-    line = input_file.readline()    
+    line = input_file.readline()
+    line_counter = 1
+    original_line = line 
     while line:
-
         if not is_empty_line(line):
             cat = is_category(line, categories)
             if cat: # changing category
                 if status == 'I':
                     # if the current category is Input we must the first
                     # node in the graph that represents the inputs.
-                    graph.add_node('Inputs','Inputs',outputs=input_names)
+                    if len(input_names) == 0:
+                        raise SyntaxError(f'Line {line_counter}: no input given.')
+                    graph.add_node('Inputs','Inputs',outputs=input_names,static_inputs_size=static_inputs_size)
                 status = line[0]
                 categories = categories[1:]
             else:
@@ -399,10 +460,13 @@ def parser(input_file,cfg,statics_input_size: int) -> Tuple:
                     parse_node(line)
                 elif status == 'E':
                     parse_edge(line)
+                else:
+                    raise SyntaxError(f'Line {line_counter}: expected "Inputs", got {original_line}.')
         line = input_file.readline()
+        line_counter += 1
 
     graph.check()
-    layers, nodes_inputs, nodes_outputs, total_parameters = graph.export(cfg, statics_input_size)
+    layers, nodes_inputs, nodes_outputs, total_parameters = graph.export(cfg)
     return layers, nodes_inputs, nodes_outputs, total_parameters, input_names
 
 class Superflex(BaseModel):
@@ -444,16 +508,16 @@ class Superflex(BaseModel):
         # Build the parameterization network. This takes static catchment attributes as inputs and estimates
         # all of the parameters for all of the different model components at once. Parameters will be extracted
         # from the output vector of this model sequentially.
-        statics_input_size = len(cfg.static_attributes + cfg.hydroatlas_attributes + cfg.evolving_attributes)
+        static_inputs_size = len(cfg.static_attributes + cfg.hydroatlas_attributes + cfg.evolving_attributes)
         # If the user requests using one-hot encoding to identify basins, this will be added to static inputs.
         if cfg.use_basin_id_encoding:
-            statics_input_size += cfg.number_of_basins
+            static_inputs_size += cfg.number_of_basins
 
         if cfg.model_description is None:
             raise ValueError("The model desctiption file must be provided in the configuration file 'model_description' field.")
         # Parse the model_description file and check if the model described is valid.
         with open(cfg.model_description,'r') as input_file:
-           self.layers, self.nodes_inputs, self.nodes_outputs, total_parameters, self.inputs = parser(input_file, cfg, statics_input_size)
+           self.layers, self.nodes_inputs, self.nodes_outputs, total_parameters, self.inputs = parser(input_file, cfg, static_inputs_size)
         # self.layers: list of elements (SnowReservoir, Splitter, LagFunction,etc ... instances)
         # self.nodes_inputs:  list of list of list of tuples containing two integers
         #                     self.nodes_inputs[i][j] = [(3,0),(4,1)] => the the jth inputs of the ith nodes is a
@@ -465,22 +529,24 @@ class Superflex(BaseModel):
         #                     total number of model parameter to optimized.
         # self.inputs       : list of strings
         #                     contains the ordered list of inputs names.
-        
-        if statics_input_size == 0:
+
+
+        if static_inputs_size == 0:
             raise ValueError("At least one static input must be provided.") # TODO
         
+        dpout = 0.0
+        hidden_sizes = [20]
+        activ = "tanh"
+        #if cfg.static_embedding is None:
+        #    hidden_sizes = cfg.static_embedding['hiddens'] if cfg.static_embedding['hiddens'] is not None else [20]
+        #    dpout = cfg.static_embedding['dropout'] if cfg.static_embedding['dropout'] is not None else 0.0
+        #    activ = cfg.static_embedding['activation'] if cfg.static_embedding['activation'] is not None else "tanh"
 
-        hidden_sizes = cfg.statics_embedding['hiddens']
-        if len(hidden_sizes) == 0:
-            hidden_sizes = [20]
         hidden_sizes.append(total_parameters)
-        hidden_sizes = [hidden_sizes, total_parameters]
-        self.parameterization = FC(
-        input_size=statics_input_size,
-        hidden_sizes=hidden_sizes,
-        dropout=cfg.statics_embedding['dropout'],
-        activation=cfg.statics_embedding['activation']
-        )
+        self.parameterization = FC(input_size=static_inputs_size,
+                                    hidden_sizes=hidden_sizes,
+                                    dropout=dpout,
+                                    activation=activ)
 
     def _execute_graph(
         self,
@@ -658,13 +724,13 @@ class _SnowReservoir(torch.nn.Module):
 
         # Network for converting temperature, precip, and static attributes into a partitioning
         # coefficient between liquid and solid precip.
-        statics_input_size = len(cfg.static_attributes + cfg.hydroatlas_attributes + cfg.evolving_attributes)
+        static_inputs_size = len(cfg.static_attributes + cfg.hydroatlas_attributes + cfg.evolving_attributes)
         if cfg.use_basin_id_encoding:
-            statics_input_size += cfg.number_of_basins
+            static_inputs_size += cfg.number_of_basins
 
         self.precip_partitioning = _FluxPartition(
             cfg=cfg,
-            num_inputs=3+statics_input_size,
+            num_inputs=3+static_inputs_size,
             num_outputs=2,
         )
 
@@ -687,9 +753,9 @@ class _SnowReservoir(torch.nn.Module):
     ) -> list[torch.Tensor]:
         """Forward pass for a snow reservoir."""
         # Partition the in-flux.
-        static_input, precip, tmin, tmax = inputs
+        static_inputs, precip, tmin, tmax = inputs
         rate = parameters
-        partition = self.precip_partitioning(inputs=[precip,torch.cat([tmin, tmax, precip], dim=-1),static_input], parameters=None)
+        partition = self.precip_partitioning(inputs=[precip,torch.cat([tmin, tmax, precip, static_inputs], dim=-1)], parameters=None)
 
         miss_flux = partition[0]
         self.storage = self.storage.clone() + partition[1]
@@ -817,8 +883,7 @@ class _FluxPartition(torch.nn.Module):
         parameters: torch.Tensor
     ) -> list[torch.Tensor]:
         """Perform forward pass through the normalized gate"""
-        flux, x, static_input = inputs
-        x = torch.cat([x,static_input], dim=-1)
+        flux, x = inputs
         weigths = self.activation(self.fc(x))
         normalized_weights = torch.nn.functional.normalize(weigths, p=1, dim=-1)
 

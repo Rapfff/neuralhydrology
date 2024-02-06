@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/dev
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: examples/07-Superflex/6_basin_list.txt 
-validation_basin_file: examples/07-Superflex/6_basin_list.txt 
-test_basin_file: examples/07-Superflex/6_basin_list.txt 
+train_basin_file: 6_basin_list.txt 
+validation_basin_file: 6_basin_list.txt 
+test_basin_file: 6_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : examples/07-Superflex/grey.txt
+model_description : grey.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
@@ -65,17 +65,6 @@ head: regression
 
 # ----> Regression settings <----
 output_activation: linear
-
-# ----> Embedding network settings <----
-
-# define number of neurons per layer in the FC network used as embedding/shortcut network
-embedding_hiddens:
-
-# activation function of embedding network (currently only tanh supported)
-embedding_activation:
-
-# dropout applied to embedding network
-embedding_dropout: 
 
 # ----> Superflex settings <----
 
@@ -180,7 +169,7 @@ save_validation_results: True
 dataset: camels_us
 
 # Path to data set root
-data_dir: data/CAMELS_US
+data_dir: ../../data/CAMELS_US
 
 # Set to True, if train data file should be save to disk. If empty or False, train data is not saved.
 save_train_data: False
@@ -251,7 +240,7 @@ static_attributes:
 # feature.
 # Convention: If a column is used as static input, the value to use for specific sample should be in
 # same row (datetime) as the target discharge value.
-additional_feature_files: data/pet.pkl
+additional_feature_files: ../../data/pet.pkl
 
 # columns of the data frame to use as (additional) "static" inputs for each sample. Must be present in
 # the above linked additional feature files. These values will be used as static inputs, but they can evolve over time.
