@@ -104,7 +104,7 @@ Edges
 
 In this example, we use a splitter first to distribute the precipitation through two routing reservoirs. Finally, the two fluxes from the two lag functions are *combined* into the transparent node.
 When a node receives several fluxes through the same input channel, these fluxes are *combined* together. This combination is a simple *sum*, except if the node is a `CatFunction`, then it is a *concatenation* (using `torch.cat`). The only purpose of a `CatFunction` node is then to concatenate several fluxes. Similarly, the only purpose of a `Transparent` node is to sum several fluxes.
-> ######Remark
+> #####Remark
 > We decided to call it `Transparent` instead of `SumFunction` to highlight the fact that, by default, the fluxes are summed.
 
 ## VII - A final example
