@@ -1,0 +1,18 @@
+Inputs
+    static_inputs
+	precip
+
+Nodes
+	s     	: Splitter
+	r[2] 	: RoutingReservoir
+	l[2] 	: LagFunction(6)
+    t       : Transparent
+
+Edges
+	Inputs[precip] - s
+    s - r1
+    s - r2
+    r1 - l1
+    r2 - l2
+    l1 - t
+    l2 - t

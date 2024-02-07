@@ -66,5 +66,6 @@ def generate_data(name,k,ts):
             f.write(' '.join([name, d[:-3], str(network(p)), 'A']))
             f.write('\n')
 
-generate_data('01510000',0.1,6)
-generate_data('01516500',0.3,6)
+if __name__ == '__main__':
+    generate_data('01510000',0.1,6)
+    generate_data('01516500',0.3,6)

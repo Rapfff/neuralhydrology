@@ -12,7 +12,7 @@ Let's start with a simple example. Here, two routing reservoirs (also called lin
 
 ```
 Inputs
-    static_input
+    static_inputs
     precip
 
 Nodes
@@ -25,7 +25,7 @@ Edges
 ```
 ![example1](pictures/example1.png)
 
-Note that `static_input` is not used in this model.
+Note that `static_inputs` is not used in this model.
 > ###### Remarks
 > - The output of this model is, as for all Superflex models, the output of the final node. 
 >
@@ -39,6 +39,10 @@ A file describing a Superflex model is divided into three sections in this preci
 3. `Edges`: defines the connections between the nodes. 
 
 While the syntax for the `Inputs` is straightforward and doesn't require any additional explanations, the next two sections are dedicated to the syntax for `Nodes` and `Edges`.
+> ###### Remark
+> There is only two important things to know about the `Inputs` section:
+> 1. The order of the inputs must correspond to the sequence in which they are provided to the model during the forward pass.
+> 2. The static inputs must be exactly called *static_inputs*, **not** *statics_inputs*, or *static_input*, etc...  
 
 
 ## IV - Nodes
@@ -78,7 +82,7 @@ The `[output_channel]` can be omitted if the source node has only one output, an
 
 ```
 Inputs
-    static_input
+    static_inputs
     precip
 
 Nodes
@@ -107,7 +111,7 @@ When a node receives several fluxes through the same input channel, these fluxes
 
 ```
 Inputs
-    static_input
+    static_inputs
     precip
     tmin
     tmax
@@ -122,11 +126,11 @@ Nodes
     lf   : LagFunction(6)
 
 Edges
-    Inputs[static_input] - (static_input) - s
+    Inputs[static_inputs] - (static_inputs) - s
     Inputs[precip] - (precip) - s
     Inputs[tmin] - (tmin) - s
     Inputs[tmax] - (tmax) - s
-    Inputs[static_input] - c
+    Inputs[static_inputs] - c
     Inputs[precip] - c
     Inputs[tmin] - c
     Inputs[tmax] - c
@@ -207,7 +211,7 @@ A snow bucket is a bucket with infinite height and a drain, where the input is p
 
 ##### Input
 
-	static_input : The static inputs for the whole model
+	static_inputs : The static inputs for the whole model
 	precip       : The precipitation
 	tmin         : The minimal temperature
 	tmax         : The maximal temperature

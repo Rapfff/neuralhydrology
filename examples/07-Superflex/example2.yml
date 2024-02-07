@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/dev
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: 6_basin_list.txt 
-validation_basin_file: 6_basin_list.txt 
-test_basin_file: 6_basin_list.txt 
+train_basin_file: 2_basin_list.txt 
+validation_basin_file: 2_basin_list.txt 
+test_basin_file: 2_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 5
+validate_every: 10
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : grey.txt
+model_description : example2.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
@@ -70,21 +70,9 @@ output_activation: linear
 
 mass_inputs:
   - prcp(mm/day)
-  - PET(mm/d)
-  - tmax(C)
-  - tmin(C)
 
 custom_normalization:
     prcp(mm/day):
-        centering: None
-        scaling: None
-    PET(mm/d):
-        centering: None
-        scaling: None
-    tmax(C):
-        centering: None
-        scaling: None
-    tmin(C):
         centering: None
         scaling: None
     QObs(mm/d):
@@ -107,15 +95,15 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.001
-  10: 0.0005
-  25: 0.0001
+  0: 0.01
+  10: 0.005
+  25: 0.001
 
 # Mini-batch size
 batch_size: 32
 
 # Number of training epochs
-epochs: 5
+epochs: 50
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.005
@@ -169,7 +157,7 @@ save_validation_results: True
 dataset: camels_us
 
 # Path to data set root
-data_dir: ../../data/CAMELS_US
+data_dir: ../../data/fake
 
 # Set to True, if train data file should be save to disk. If empty or False, train data is not saved.
 save_train_data: False
@@ -192,11 +180,11 @@ forcings:
 #   1H:
 #     - total_precipitation_nldas_hourly
 dynamic_inputs:
-# - prcp(mm/day)
+ - prcp(mm/day)
 # - srad(W/m2)
 # - tmax(C)
 # - tmin(C)
-- vp(Pa)
+# - vp(Pa)
 
 # which columns to use as target
 target_variables:
@@ -235,12 +223,13 @@ static_attributes:
 # - low_prec_freq
 # - low_prec_dur
 
+
 # Path to pickle file(s) containing additional data. Each pickle file must contain a dictionary
 # with one key for each basin and the value is a time indexed data frame, where each column is a 
 # feature.
 # Convention: If a column is used as static input, the value to use for specific sample should be in
 # same row (datetime) as the target discharge value.
-additional_feature_files: ../../data/pet.pkl
+additional_feature_files:
 
 # columns of the data frame to use as (additional) "static" inputs for each sample. Must be present in
 # the above linked additional feature files. These values will be used as static inputs, but they can evolve over time.

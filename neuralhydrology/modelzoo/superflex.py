@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Tuple
 import re 
 
 import torch
@@ -36,6 +36,9 @@ ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
                          }
 
 class _DirectedLabelledGraph:
+    """
+    This class exclusively used by the 'parser' function to represent the model under construction.
+    """
     def __init__(self) -> None:
         self.nodes = []
         self.layer = -1
@@ -46,7 +49,27 @@ class _DirectedLabelledGraph:
             res += str(i)+' '+str(n)+'\n'
         return res
 
-    def add_node(self,name,type_node,param=False,outputs=None,static_inputs_size=None):
+    def add_node(self,name: str,type_node: str,
+                 param: int=0,outputs: list=[],
+                 static_inputs_size: int=0) -> None:
+        """
+        Add a new node in the graph.
+        This method is called by the 'parser' function while parsing the 'Nodes' section
+        of the model_description file.
+
+        Parameters
+        ----------
+        name : str
+            name of the node in the description file.
+        type_node : str
+            type of the node, one in ELEMENTS_INPUTS.keys()
+        param : int, optional
+            used for LagFunction only, corresponds to 'timesteps, by default 0.
+        outputs : list, optional
+            used for Inputs only, list of inputs names, by default []
+        static_inputs_size : int, optional
+            used for Inputs only, size of the static_inputs, by default 0.
+        """
         if self.find_node(name) != None:
             raise ValueError(name+' declared multiple times.')
         if type_node == 'SnowReservoir':
@@ -71,13 +94,42 @@ class _DirectedLabelledGraph:
             raise ValueError(type_node + ' is not a valid element type.')
         self.nodes.append(n)
     
-    def find_node(self,name):
+    def find_node(self,name: str):
+        """
+        Return the index of the node with name `name` in `self.nodes`.
+        If there is no node with this name, returns `None`.
+
+        Parameters
+        ----------
+        name : str
+            name of the node to look for.
+
+        Returns
+        -------
+        int 
+            index of this node.
+        """
         for i,n in enumerate(self.nodes):
             if n.name == name:
                 return i
         return None
     
-    def add_connection(self, output_node : str, output_data: str, input_node: str, input_data:str):
+    def add_connection(self, output_node : str, output_data: str, input_node: str, input_data:str) -> None:
+        """
+        Add an edge connecting node ``output_node``'s output channel ``output_data`` to node ``input_node``'s
+        channel ``input_data``.
+
+        Parameters
+        ----------
+        output_node : str
+            name of the source node.
+        output_data : str
+            name of the source node's output channel.
+        input_node : str
+            name of the destination node.
+        input_data : str
+            name of the destination node's input channel.
+        """
         error_msg = f'Cannot add an edge between {output_node} and {input_node}:'
         output_node_idx = self.find_node(output_node)
         if output_node_idx is None:
@@ -89,16 +141,25 @@ class _DirectedLabelledGraph:
         data_size = self.nodes[output_node_idx].outputs_sizes[output_data]
         self.nodes[input_node_idx].add_input(input_data, output_node_idx, output_data, data_size)
     
-    def check(self):
+    def check(self) -> None:
+        """
+        Check  1) if all the input channels of all the nodes are connected to at least one output channel, 
+        and 2) if the graph is acyclic.
+
+        If one of these two conditions if not verified, returns a ValueError.
+        """
         # 1 - check completness
         for n in self.nodes:
-            if not n.is_complete():
-                return False
+            n.is_complete()
         # 2 - check DAG
         if not self.is_dag():
             raise ValueError("The model described is not acyclic.")
     
-    def compute_layers(self):
+    def compute_layers(self) -> None:
+        """
+        Compute the layer value for each node and sets its ``layer`` to this value.
+        The layer value of a node is the length of the longest path from the root to itself.
+        """
         self.nodes[0].set_layer(0)
         queue = [self.nodes[0]]
         while queue:
@@ -135,13 +196,13 @@ class _DirectedLabelledGraph:
             raise ValueError("Currently, bucket models only support a single target variable.")
         return layers, nodes_inputs, nodes_outputs, nb_parameters
         
-    def is_acyclic_dfs(self, node, visited, recursion_stack):
+    def _is_acyclic_dfs(self, node, visited, recursion_stack):
         visited[node.name] = True
         recursion_stack[node.name] = True
         for son in node.sons:
             son = self.nodes[son]
             if not visited[son.name]:
-                if self.is_acyclic_dfs(son, visited, recursion_stack):
+                if self._is_acyclic_dfs(son, visited, recursion_stack):
                     return True
             elif recursion_stack[son.name]:
                 return True
@@ -155,7 +216,7 @@ class _DirectedLabelledGraph:
 
         for node in self.nodes:
             if not visited[node.name]:
-                if self.is_acyclic_dfs(node, visited, recursion_stack):
+                if self._is_acyclic_dfs(node, visited, recursion_stack):
                     return False
 
         return True
@@ -183,6 +244,8 @@ class _Node:
             else:
                 data = 0
         else:
+            if data not in ELEMENTS_OUTPUTS[self.type_node]:
+                raise ValueError(f"Node {self.name} of type {self.type_node} doesn't have any output channel {data}")
             data = ELEMENTS_OUTPUTS[self.type_node].index(data)
         if not son_node in self.sons:
             self.sons.append(son_node)
@@ -194,6 +257,8 @@ class _Node:
                 input_data = next(iter(self.inputs))
             else:
                 raise ValueError(self.name+ " has several inputs and none was specified.")
+        if not input_data in self.inputs:
+            raise ValueError(f"Node {self.name} of type {self.type_node} doesn't have any input channel {input_data}")
         self.inputs[input_data].append((father_node,father_data))
         return input_data
     
@@ -201,7 +266,6 @@ class _Node:
         for i in self.inputs:
             if len(self.inputs[i]) == 0:
                 raise ValueError(self.name+' input '+i+' is not set.')
-        return True
 
     def set_layer(self,layer):
         self.layer = layer

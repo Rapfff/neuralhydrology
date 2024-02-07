@@ -1,5 +1,5 @@
 Inputs
-	static_input
+	static_inputs
 	precip
 	tmin
 	tmax
@@ -14,11 +14,11 @@ Nodes
 	lf 		: LagFunction(6)
 
 Edges
-	Inputs[static_input] - (static_input) - s
+	Inputs[static_inputs] - (static_inputs) - s
 	Inputs[precip] - (precip) - s
 	Inputs[tmin] - (tmin) - s
 	Inputs[tmax] - (tmax) - s
-	Inputs[static_input] - c
+	Inputs[static_inputs] - c
 	Inputs[precip] - c
 	Inputs[tmin] - c
 	Inputs[tmax] - c
