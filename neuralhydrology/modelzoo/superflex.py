@@ -10,6 +10,7 @@ from neuralhydrology.modelzoo.inputlayer import InputLayer
 ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
                    'ThresholdReservoir': ['x_in','x_out'],
                    'RoutingReservoir':['x_in'],
+                   'AnalyticRoutingReservoir':['x_in'],
                    'FluxPartition':['flux','x'],
                    'LagFunction':['x_in'],
                    'Inputs':[],
@@ -19,6 +20,7 @@ ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
 ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'ThresholdReservoir': ['overflow'],
                    'RoutingReservoir':['outflow'],
+                   'AnalyticRoutingReservoir':['outflow'],
                    'FluxPartition':[],
                    'LagFunction':['output'],
                    'CatFunction':['output'],
@@ -27,6 +29,7 @@ ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
 ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
                          'ThresholdReservoir': 1,
                          'RoutingReservoir':1,
+                         'AnalyticRoutingReservoir':1,
                          'FluxPartition':0,
                          'LagFunction':0, #overrided
                          'Inputs':0,
@@ -76,6 +79,8 @@ class _DirectedLabelledGraph:
             n = _SnowNode(name,type_node)
         elif type_node == 'ThresholdReservoir':
             n = _ThresholdNode(name,type_node)
+        elif type_node == 'AnalyticRoutingReservoir':
+            n = _AnalyticRoutingNode(name,type_node)
         elif type_node == 'RoutingReservoir':
             n = _RoutingNode(name,type_node)
         elif type_node == 'FluxPartition':
@@ -275,6 +280,16 @@ class _RoutingNode(_Node):
         super().__init__(name, type_node)
     def return_instance(self, cfg):
         return _RoutingReservoir(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
+
+class _AnalyticRoutingNode(_Node):
+    def __init__(self,name, type_node) -> None:
+        super().__init__(name, type_node)
+    def return_instance(self, cfg):
+        return _AnalyticRoutingReservoir(cfg)
     def add_input(self, input_data, father_node, father_data, data_size):
         input_data = super().add_input(input_data, father_node, father_data)
         if len(self.inputs[input_data]) == 1:
@@ -761,6 +776,61 @@ class _RoutingReservoir(torch.nn.Module):
         # Outflow from leaky bucket.
         outflow = rate * self.storage
         self.storage = self.storage - outflow
+        return [outflow]
+
+class _AnalyticRoutingReservoir(torch.nn.Module):
+    """Initialize a routing bucket node.
+
+    A routing bucket is a bucket with infinite height and a drain.
+    It has one parameter: outflow rate. The parameter is treated dynamically, instead of
+    as a fixed parameter, which allows the parameter to be either learned or estimated with
+    an external parameterization network. The routing bucket only has a prescribed source
+    flux.
+
+    Parameters
+    ----------
+    cfg : Config
+        Configuration of the run, read from the config file with some additional keys (such as
+        number of basins).
+    """
+
+    def __init__(
+        self,
+        cfg: Config
+    ):
+        super(_AnalyticRoutingReservoir, self).__init__()
+        self.number_of_parameters = 1
+
+    def initialize_bucket(
+        self,
+        batch_size: int,
+        device: torch.device
+    ) -> torch.Tensor:
+        """Initializes a bucket during runtime.
+        
+        """
+        # Initialization must happen at runtime so that we know the batch size and device.
+        # We can do this however we want, but for now let's just start with every bucket being empty.
+        self.storage = torch.zeros([batch_size,1], device=device)
+
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        """Forward pass for a routing reservoir."""
+        # Account for the source flux.
+        x_in = inputs[0]
+        rate = torch.unsqueeze(parameters, dim=-1)
+
+        # Ensure that the bucket rate parameter is in (0, 1).
+        rate = torch.sigmoid(rate)
+
+        # Outflow from leaky bucket.
+        outflow = x_in + self.storage - x_in/rate - self.storage/torch.exp(rate) + x_in/(rate*torch.exp(rate))
+        self.storage = self.storage.clone() + x_in - outflow
+        #print('\n',rate)
+        #print('\n',outflow)
         return [outflow]
 
 class _SnowReservoir(torch.nn.Module):

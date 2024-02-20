@@ -96,17 +96,18 @@ def attributes_sanity_check(df: pd.DataFrame):
     """
     # Check for NaNs in standard deviation of attributes.
     attributes = []
-    if any(df.std() == 0.0) or any(df.std().isnull()):
-        for k, v in df.std().iteritems():
-            if (v == 0) or (np.isnan(v)):
-                attributes.append(k)
-    if attributes:
-        msg = [
-            "The following attributes have a std of zero or NaN, which results in NaN's ",
-            "when normalizing the features. Remove the attributes from the attribute feature list ",
-            "and restart the run. \n", f"Attributes: {attributes}"
-        ]
-        raise RuntimeError("".join(msg))
+    if len(df) > 1:
+        if any(df.std() == 0.0) or any(df.std().isnull()):
+            for k, v in df.std().iteritems():
+                if (v == 0) or (np.isnan(v)):
+                    attributes.append(k)
+        if attributes:
+            msg = [
+                "The following attributes have a std of zero or NaN, which results in NaN's ",
+                "when normalizing the features. Remove the attributes from the attribute feature list ",
+                "and restart the run. \n", f"Attributes: {attributes}"
+            ]
+            raise RuntimeError("".join(msg))
 
     # Check for NaNs in any attribute of any basin
     nan_df = df[df.isnull().any(axis=1)]
