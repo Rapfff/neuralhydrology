@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/dev
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: 1_basin_list.txt 
-validation_basin_file: 1_basin_list.txt 
-test_basin_file: 1_basin_list.txt 
+train_basin_file: 4_basin_list.txt 
+validation_basin_file: 4_basin_list.txt 
+test_basin_file: 4_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 10
+validate_every: 5
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : example4.txt
+model_description : archs/arch6.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
@@ -103,7 +103,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 10
+epochs: 25
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.005

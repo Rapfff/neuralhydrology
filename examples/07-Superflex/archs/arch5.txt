@@ -1,0 +1,16 @@
+Inputs
+	static_inputs
+	precip
+	pet
+
+Nodes
+	n   : NegNode
+	a[2]: AnalyticRoutingReservoir
+	b	: BiasNode
+
+Edges
+	Inputs[precip] - a1
+	Inputs[pet] - n
+	n - a2
+	a1 - a2
+	a2 - b

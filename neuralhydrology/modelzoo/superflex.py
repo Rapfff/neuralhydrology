@@ -16,7 +16,10 @@ ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
                    'Inputs':[],
                    'CatFunction':['x'],
                    'Transparent':['x'],
-                   'Splitter':['x']}
+                   'NegNode' : ['x'],
+                   'BiasNode' : ['x'],
+                   'Splitter':['x'],
+                   'FullyConnected':['x']}
 ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'ThresholdReservoir': ['overflow'],
                    'RoutingReservoir':['outflow'],
@@ -25,7 +28,10 @@ ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'LagFunction':['output'],
                    'CatFunction':['output'],
                    'Transparent':['output'],
-                   'Splitter'   :['output']}
+                   'NegNode' : ['output'],
+                   'BiasNode' : ['output'],
+                   'Splitter'   :['output'],
+                   'FullyConnected':['output']} #overrided
 ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
                          'ThresholdReservoir': 1,
                          'RoutingReservoir':1,
@@ -35,7 +41,10 @@ ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
                          'Inputs':0,
                          'CatFunction':0,
                          'Transparent':0,
-                         'Splitter' :0 #overrided
+                         'NegNode':0,
+                         'BiasNode':1,
+                         'Splitter' :0, #overrided
+                         'FullyConnected':0
                          }
 
 class _DirectedLabelledGraph:
@@ -93,8 +102,14 @@ class _DirectedLabelledGraph:
             n = _CatNode(name,type_node)
         elif type_node == 'Transparent':
             n = _TransparentNode(name,type_node)
+        elif type_node == 'NegNode':
+            n = _NegNode(name,type_node)
+        elif type_node == 'BiasNode':
+            n = _BiasNode(name,type_node)
         elif type_node == 'Splitter':
             n = _SplitterNode(name, type_node)
+        elif type_node == 'FullyConnected':
+            n = _FullyConnectedLayerNode(name, type_node, param)
         else:
             raise ValueError(type_node + ' is not a valid element type.')
         self.nodes.append(n)
@@ -141,7 +156,7 @@ class _DirectedLabelledGraph:
             raise SyntaxError(error_msg + f'{output_node} not declared.')
         input_node_idx  = self.find_node(input_node )
         if input_node_idx is None:
-            raise SyntaxError(error_msg + f'{output_node} not declared.')
+            raise SyntaxError(error_msg + f'{input_node_idx} not declared.')
         output_data = self.nodes[output_node_idx].add_output(input_node_idx, output_data)
         data_size = self.nodes[output_node_idx].outputs_sizes[output_data]
         self.nodes[input_node_idx].add_input(input_data, output_node_idx, output_data, data_size)
@@ -192,11 +207,14 @@ class _DirectedLabelledGraph:
             node_idx = self.find_node(n.name)
             layers[-1].append((n.return_instance(cfg),node_idx))
 
+            if n.type_node == '_FullyConnectedLayerNode':
+                nodes_outputs[node_idx] = []
+
             nodes_inputs[node_idx] = []
             for input_type in ELEMENTS_INPUTS[n.type_node]:
-                nodes_inputs[node_idx].append([(n, d) for n, d in n.inputs[input_type]])
+                nodes_inputs[node_idx].append([(nn,d) for nn, d in n.inputs[input_type]])
+                
 
-        
         if len(layers[-1]) != 1 or len(nodes_outputs[layers[-1][0][1]]) != 1:
             raise ValueError("Currently, bucket models only support a single target variable.")
         return layers, nodes_inputs, nodes_outputs, nb_parameters
@@ -344,6 +362,10 @@ class _FluxNode(_Node):
 class _LagNode(_Node):
     def __init__(self,name, type_node,time_steps) -> None:
         super().__init__(name, type_node)
+        try:
+            time_steps = int(time_steps)
+        except TypeError:
+            raise TypeError("The parameter of the LagFunction must be an integer.")
         if not time_steps:
             raise ValueError("A LagFunction must be declared with the number of time_steps (ex.: LagFunction(5)")
         self.nb_parameters = time_steps
@@ -382,6 +404,26 @@ class _TransparentNode(_Node):
         input_data = super().add_input(input_data, father_node, father_data)
         if len(self.inputs[input_data]) == 1:
             self.outputs_sizes[0] = data_size
+        
+class _NegNode(_Node):
+    def __init__(self,name, type_node) -> None:
+        super().__init__(name, type_node)
+    def return_instance(self, cfg):
+        return _Neg(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
+
+class _BiasNode(_Node):
+    def __init__(self,name, type_node) -> None:
+        super().__init__(name, type_node)
+    def return_instance(self, cfg):
+        return _Bias(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
 
 class _SplitterNode(_Node):
     def __init__(self,name, type_node) -> None:
@@ -392,12 +434,34 @@ class _SplitterNode(_Node):
         data = len(self.sons)
         if not son_node in self.sons:
             self.sons.append(son_node)
-            self.outputs_sizes.append(self.outputs_sizes[-1])
+            if len(self.sons) > 1:
+                self.outputs_sizes.append(self.outputs_sizes[-1])
         return data
     def add_input(self, input_data, father_node, father_data, data_size):
         input_data = super().add_input(input_data, father_node, father_data)
-        if self.inputs[input_data] == 1:
-            self.outputs_sizes = [data_size for _ in self.sons]
+        if len(self.inputs[input_data]) == 1: #the first time we add an input
+            self.outputs_sizes = [data_size for _ in range(max(1,len(self.sons)))] #we set the output sizes
+
+class _FullyConnectedLayerNode(_Node):
+    def __init__(self,name, type_node,param) -> None:
+        super().__init__(name, type_node)
+        param = param.lower()
+        if param not in ['sigmoid','tanh']:
+            raise ValueError(param +" is not a valid activation function. 'tanh', and 'sigmoid' are supported.")
+        self.activation_function = param
+    def return_instance(self, cfg):
+        return _FullyConnected(cfg,len(self.inputs['x']), self.activation_function, len(self.sons))
+    def add_output(self, son_node, data) -> int:
+        data = len(self.sons)
+        if not son_node in self.sons:
+            self.sons.append(son_node)
+            if len(self.sons) > 1:
+                self.outputs_sizes.append(self.outputs_sizes[-1])
+        return data
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes = [data_size for _ in range(max(1,len(self.sons)))]
 
 def parser(input_file,cfg,static_inputs_size: int) -> Tuple:
     """
@@ -476,15 +540,15 @@ def parser(input_file,cfg,static_inputs_size: int) -> Tuple:
             names = [name+str(i+1) for i in range(number)]
         
         typ  = remove_blank(l[1])
-        pattern = r'(\w+)(\(\d+\))'
+        pattern = r'(\w+)(\(\w+\))'
         match = re.search(pattern, typ)
         param = None
         if match: # line of form "name : typenode(x)"
             typ = match.group(1)
-            if typ != 'LagFunction':
-                print(f'WARN: line {line_counter}: the value between parenthesis will be ignored, since this node is not a LagFunction.')
+            if typ != 'LagFunction' and typ != 'FullyConnected':
+                print(f'WARN: line {line_counter}: the value between parenthesis will be ignored, since this node is neither a LagFunction or a FullyConnected.')
             else:
-                param = int(match.group(2)[1:-1])
+                param = match.group(2)[1:-1]
         
         for name in names:
             graph.add_node(name, typ, param)
@@ -643,13 +707,14 @@ class Superflex(BaseModel):
                 node_inputs = []
                 # we first deal with the inputs:
                 # for each input of this node
+
                 for k in self.nodes_inputs[node_idx]:
                     node_inputs.append([])
                     # add all sources for this input in node_inputs[-1]
                     for l in k:
                         node_inputs[-1].append(self.nodes_outputs[l[0]][l[1]])
                     # if the node is a CatFunction the sources are concatenated
-                    if type(node) == _CatFunction:
+                    if type(node) == _CatFunction or type(node) == _FullyConnected:
                         node_inputs[-1] = torch.cat(node_inputs[-1], dim=-1)
                     # otherwhise they are element-wise sumed 
                     else:
@@ -822,15 +887,10 @@ class _AnalyticRoutingReservoir(torch.nn.Module):
         # Account for the source flux.
         x_in = inputs[0]
         rate = torch.unsqueeze(parameters, dim=-1)
-
-        # Ensure that the bucket rate parameter is in (0, 1).
-        rate = torch.sigmoid(rate)
-
-        # Outflow from leaky bucket.
-        outflow = x_in + self.storage - x_in/rate - self.storage/torch.exp(rate) + x_in/(rate*torch.exp(rate))
-        self.storage = self.storage.clone() + x_in - outflow
-        #print('\n',rate)
-        #print('\n',outflow)
+        rate = torch.relu(rate) + 0.01
+        v = x_in/rate + self.storage/torch.exp(rate) - x_in/(rate*torch.exp(rate))
+        outflow = x_in + self.storage - v
+        self.storage = v
         return [outflow]
 
 class _SnowReservoir(torch.nn.Module):
@@ -1128,6 +1188,98 @@ class _Transparent(torch.nn.Module):
         parameters: torch.Tensor
     ) -> list[torch.Tensor]:
         return inputs
+
+class _Neg(torch.nn.Module):
+
+    def __init__(
+        self,
+        cfg: Config
+    ):
+        super(_Neg, self).__init__()
+        self.number_of_parameters = 0
+
+    def initialize_bucket(
+        self,
+        batch_size: int,
+        device: torch.device
+    ) -> None:
+        pass
+
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        return [-1*inputs[0]]
+
+class _Bias(torch.nn.Module):
+
+    def __init__(
+        self,
+        cfg: Config
+    ):
+        super(_Bias, self).__init__()
+        self.number_of_parameters = 1
+
+    def initialize_bucket(
+        self,
+        batch_size: int,
+        device: torch.device
+    ) -> None:
+        pass
+
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        x_in = inputs[0]
+        #print(x_in)
+        rate = torch.unsqueeze(parameters, dim=-1)
+        outflow = rate + x_in
+        return [outflow]
+
+class _FullyConnected(torch.nn.Module):
+    """Fully connected layer with N normalized outputs.
+
+    Parameters
+    ----------
+    cfg : Config
+        Configuration of the run, read from the config file with some additional keys (such as number of basins).
+    num_outputs: Number of normalized outputs.
+    ----------
+    """
+    def __init__(
+        self,
+        cfg: Config,
+        num_inputs: int,
+        activation_function : str,
+        num_outputs: int
+    ):
+        super(_FullyConnected, self).__init__()
+        self.number_of_parameters = 0
+        self.fc = FC(input_size=num_inputs,
+                                    hidden_sizes=[num_outputs],
+                                    dropout=0.0,
+                                    activation=activation_function)
+
+    def initialize_bucket(
+        self,
+        batch_size: int,
+        device: torch.device
+    ) -> None:
+        """Do nothing. Just for compatiblity reasons.
+        """
+        pass
+
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        """Perform forward pass through the normalized gate"""
+        x = inputs[0]
+        return self.fc(x)
 
 class _Splitter(torch.nn.Module):
     """Fully connected layer with N normalized outputs.
