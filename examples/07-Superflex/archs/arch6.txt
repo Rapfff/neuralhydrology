@@ -1,0 +1,42 @@
+Inputs
+	static_inputs
+	precip
+	evap
+
+Nodes
+	T[4]	: ThresholdReservoir
+	l[8]	: RoutingReservoir
+	t		: Transparent
+    s[3]    : Splitter
+
+Edges
+	Inputs[precip] - s1
+	Inputs[evap]   - s2
+    s1 - (x_in) - T1
+    s1 - (x_in) - T2
+    s1 - (x_in) - T3
+    s1 - (x_in) - T4
+    s2 - (pe)   - T1
+    s2 - (pe)   - T2
+    s2 - (pe)   - T3
+    s2 - (pe)   - T4
+	T1 - s3
+	T2 - s3
+	T3 - s3
+	T4 - s3
+    s3 - l1
+    s3 - l2
+	s3 - l3
+	s3 - l4
+    s3 - l5
+    s3 - l6
+	s3 - l7
+	s3 - l8
+	l1 - t
+	l2 - t
+	l3 - t
+	l4 - t
+	l5 - t
+	l6 - t
+	l7 - t
+	l8 - t

@@ -1,7 +1,7 @@
 # --- Experiment configurations --------------------------------------------------------------------
 
 # experiment name, used as folder name
-experiment_name: arch4
+experiment_name: arch6
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
 run_dir: runs/dev
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : archs/arch4.txt
+model_description : archs/arch6.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
