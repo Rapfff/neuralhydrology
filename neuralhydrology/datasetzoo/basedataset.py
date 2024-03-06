@@ -714,7 +714,8 @@ class BaseDataset(Dataset):
             self._setup_normalization(xr)
 
         # performs normalization
-        xr = (xr - self.scaler["xarray_feature_center"]) / self.scaler["xarray_feature_scale"]
+        if self.cfg.model != 'superflex':
+            xr = (xr - self.scaler["xarray_feature_center"]) / self.scaler["xarray_feature_scale"]
 
         self._create_lookup_table(xr)
 

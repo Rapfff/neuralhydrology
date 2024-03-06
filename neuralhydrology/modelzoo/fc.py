@@ -61,6 +61,8 @@ class FC(nn.Module):
             activation = nn.Sigmoid()
         elif name.lower() == "linear":
             activation = nn.Identity()
+        elif name.lower() == "relu":
+            activation = nn.ReLU()
         else:
             raise NotImplementedError(f"{name} currently not supported as activation in this class")
         return activation

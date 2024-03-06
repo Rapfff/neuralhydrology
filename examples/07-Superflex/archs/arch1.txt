@@ -1,16 +1,19 @@
 Inputs
 	static_inputs
 	precip
-	pet
+	evap
 
 Nodes
-	n   : NegNode
-	a[2]: AnalyticRoutingReservoir
-	b	: BiasNode
+	T		: ThresholdReservoir
+	l[2]	: RoutingReservoir
+	t		: Transparent
+	s		: Splitter
 
 Edges
-	Inputs[precip] - a1
-	Inputs[pet] - n
-	n  - a2
-	a1 - b
-	a2 - b
+	Inputs[precip] - (x_in) - T
+	Inputs[evap] - (pe) - T
+	T - s
+	s - l1
+	s - l2
+	l1 - t
+	l2 - t

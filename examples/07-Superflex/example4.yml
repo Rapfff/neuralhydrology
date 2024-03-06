@@ -1,15 +1,15 @@
 # --- Experiment configurations --------------------------------------------------------------------
 
 # experiment name, used as folder name
-experiment_name:  
+experiment_name: arch4
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
 run_dir: runs/dev
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: 4_basin_list.txt 
-validation_basin_file: 4_basin_list.txt 
-test_basin_file: 4_basin_list.txt 
+train_basin_file: 2_basin_list.txt 
+validation_basin_file: 2_basin_list.txt 
+test_basin_file: 2_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : archs/arch6.txt
+model_description : archs/arch4.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
@@ -65,20 +65,6 @@ head: regression
 
 # ----> Regression settings <----
 output_activation: linear
-
-# ----> Superflex settings <----
-
-mass_inputs:
-  - prcp(mm/day)
-
-custom_normalization:
-    prcp(mm/day):
-        centering: None
-        scaling: None
-    QObs(mm/d):
-        centering: None
-        scaling: None
-
 
 # --- Training configuration -----------------------------------------------------------------------
 
@@ -96,8 +82,8 @@ regularization:
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
   0: 0.01
-  10: 0.005
-  25: 0.001
+  10: 0.01
+  25: 0.01
 
 # Mini-batch size
 batch_size: 32
@@ -106,7 +92,7 @@ batch_size: 32
 epochs: 25
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
-target_noise_std: 0.005
+target_noise_std: 0.1
 
 # If a value, clips the gradients during training to that norm.
 clip_gradient_norm: 1
@@ -136,7 +122,7 @@ seq_length: 365
 num_workers: 1
 
 # Log the training loss every n steps
-log_interval: 1
+log_interval: 5
 
 # If true, writes logging results into tensorboard file
 log_tensorboard: True
@@ -145,7 +131,7 @@ log_tensorboard: True
 log_n_figures: -1
 
 # Save model weights every n epochs
-save_weights_every: 1
+save_weights_every: 5
 
 # Store the results of the validation to disk
 save_validation_results: True
@@ -157,7 +143,7 @@ save_validation_results: True
 dataset: camels_us
 
 # Path to data set root
-data_dir: ../../data/fake
+data_dir: ../../data/CAMELS_US
 
 # Set to True, if train data file should be save to disk. If empty or False, train data is not saved.
 save_train_data: False

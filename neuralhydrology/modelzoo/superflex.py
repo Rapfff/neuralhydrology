@@ -2,15 +2,16 @@ from typing import Tuple
 import re 
 
 import torch
+from torch.nn.functional import softplus
 from neuralhydrology.modelzoo.basemodel import BaseModel
 from neuralhydrology.utils.config import Config
 from neuralhydrology.modelzoo.fc import FC
 from neuralhydrology.modelzoo.inputlayer import InputLayer
 
 ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
-                   'ThresholdReservoir': ['x_in','x_out'],
+                   #'ThresholdReservoir': ['x_in','x_out'],
+                   'ThresholdReservoir': ['x_in','pe'],
                    'RoutingReservoir':['x_in'],
-                   'AnalyticRoutingReservoir':['x_in'],
                    'FluxPartition':['flux','x'],
                    'LagFunction':['x_in'],
                    'Inputs':[],
@@ -23,7 +24,6 @@ ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
 ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'ThresholdReservoir': ['overflow'],
                    'RoutingReservoir':['outflow'],
-                   'AnalyticRoutingReservoir':['outflow'],
                    'FluxPartition':[],
                    'LagFunction':['output'],
                    'CatFunction':['output'],
@@ -33,9 +33,9 @@ ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'Splitter'   :['output'],
                    'FullyConnected':['output']} #overrided
 ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
-                         'ThresholdReservoir': 1,
+                         #'ThresholdReservoir': 1, for euler
+                         'ThresholdReservoir': 2, # for analytic
                          'RoutingReservoir':1,
-                         'AnalyticRoutingReservoir':1,
                          'FluxPartition':0,
                          'LagFunction':0, #overrided
                          'Inputs':0,
@@ -88,8 +88,6 @@ class _DirectedLabelledGraph:
             n = _SnowNode(name,type_node)
         elif type_node == 'ThresholdReservoir':
             n = _ThresholdNode(name,type_node)
-        elif type_node == 'AnalyticRoutingReservoir':
-            n = _AnalyticRoutingNode(name,type_node)
         elif type_node == 'RoutingReservoir':
             n = _RoutingNode(name,type_node)
         elif type_node == 'FluxPartition':
@@ -303,16 +301,6 @@ class _RoutingNode(_Node):
         if len(self.inputs[input_data]) == 1:
             self.outputs_sizes[0] = data_size
 
-class _AnalyticRoutingNode(_Node):
-    def __init__(self,name, type_node) -> None:
-        super().__init__(name, type_node)
-    def return_instance(self, cfg):
-        return _AnalyticRoutingReservoir(cfg)
-    def add_input(self, input_data, father_node, father_data, data_size):
-        input_data = super().add_input(input_data, father_node, father_data)
-        if len(self.inputs[input_data]) == 1:
-            self.outputs_sizes[0] = data_size
-    
 class _ThresholdNode(_Node):
     def __init__(self,name, type_node) -> None:
         super().__init__(name, type_node)
@@ -632,11 +620,8 @@ class Superflex(BaseModel):
         cfg: Config
     ):
         super(Superflex, self).__init__(cfg=cfg)
-
         if len(cfg.target_variables) > 1:
             raise ValueError("Currently, superflex models only support a single target variable.")
-
-        self._n_mass_vars = len(cfg.mass_inputs)
 
         # The universal embedding network. This network can't transform the dynamic inputs
         # because that would change units of the conserved inputs (P & E).
@@ -677,19 +662,17 @@ class Superflex(BaseModel):
         if static_inputs_size == 0:
             raise ValueError("At least one static input must be provided.") # TODO
         
-        dpout = 0.0
-        hidden_sizes = [20]
-        activ = "tanh"
         #if cfg.static_embedding is None:
         #    hidden_sizes = cfg.static_embedding['hiddens'] if cfg.static_embedding['hiddens'] is not None else [20]
         #    dpout = cfg.static_embedding['dropout'] if cfg.static_embedding['dropout'] is not None else 0.0
         #    activ = cfg.static_embedding['activation'] if cfg.static_embedding['activation'] is not None else "tanh"
-
-        hidden_sizes.append(total_parameters)
-        self.parameterization = FC(input_size=static_inputs_size,
-                                    hidden_sizes=hidden_sizes,
-                                    dropout=dpout,
-                                    activation=activ)
+        
+        self.parameterization = torch.nn.Sequential(
+            torch.nn.Linear(static_inputs_size, 20),
+            torch.nn.ReLU(),  # Use ReLU activation
+            torch.nn.Linear(20, total_parameters),
+            torch.nn.Sigmoid()  # Apply sigmoid activation to enforce positivity
+        )
 
     def _execute_graph(
         self,
@@ -698,6 +681,7 @@ class Superflex(BaseModel):
     ) -> torch.Tensor:
         #load the inputs
         self.nodes_outputs[0] = inputs
+
         parameters_count = 0
         # for each layer
         for i in range(1,len(self.layers)):
@@ -763,13 +747,13 @@ class Superflex(BaseModel):
         #  - x_d are dynamic inputs.
         #  - x_s are static inputs.
         x_d, x_s = self.embedding_net(data, concatenate_output=False)
-
         # Dimensions.
         time_steps, batch_size, _ = x_d.shape
 
         # Estimate model parameters.
         if self.parameterization:
-            parameters = self.parameterization(x=x_s)
+            parameters = self.parameterization(x_s)
+            #assert not torch.isnan(parameters).any().item()
         # Initialize storage in all model components.
         for i in range(1,len(self.layers)):
             for j in range(len(self.layers[i])):
@@ -777,10 +761,9 @@ class Superflex(BaseModel):
         # Execute time loop.
         output = []
         for t in range(time_steps):
-            inputs = [x_s]
-            for i in range(len(self.inputs)):
+            inputs = [x_s] #WARNING !!!!! STATIC INPUTS MUST ALWAYS BE FIRST IN THE MODEL DESCRIPTION
+            for i in range(len(self.inputs)-1):
                 inputs.append(torch.unsqueeze(x_d[t, :, i], -1))
-
             output.append(
                 self._execute_graph(
                     parameters=parameters,
@@ -824,7 +807,7 @@ class _RoutingReservoir(torch.nn.Module):
         # We can do this however we want, but for now let's just start with every bucket being empty.
         self.storage = torch.zeros([batch_size,1], device=device)
 
-    def forward(
+    def forward_explicit_euler(
         self,
         inputs: list[torch.Tensor],
         parameters: torch.Tensor
@@ -842,42 +825,7 @@ class _RoutingReservoir(torch.nn.Module):
         outflow = rate * self.storage
         self.storage = self.storage - outflow
         return [outflow]
-
-class _AnalyticRoutingReservoir(torch.nn.Module):
-    """Initialize a routing bucket node.
-
-    A routing bucket is a bucket with infinite height and a drain.
-    It has one parameter: outflow rate. The parameter is treated dynamically, instead of
-    as a fixed parameter, which allows the parameter to be either learned or estimated with
-    an external parameterization network. The routing bucket only has a prescribed source
-    flux.
-
-    Parameters
-    ----------
-    cfg : Config
-        Configuration of the run, read from the config file with some additional keys (such as
-        number of basins).
-    """
-
-    def __init__(
-        self,
-        cfg: Config
-    ):
-        super(_AnalyticRoutingReservoir, self).__init__()
-        self.number_of_parameters = 1
-
-    def initialize_bucket(
-        self,
-        batch_size: int,
-        device: torch.device
-    ) -> torch.Tensor:
-        """Initializes a bucket during runtime.
-        
-        """
-        # Initialization must happen at runtime so that we know the batch size and device.
-        # We can do this however we want, but for now let's just start with every bucket being empty.
-        self.storage = torch.zeros([batch_size,1], device=device)
-
+    
     def forward(
         self,
         inputs: list[torch.Tensor],
@@ -886,12 +834,11 @@ class _AnalyticRoutingReservoir(torch.nn.Module):
         """Forward pass for a routing reservoir."""
         # Account for the source flux.
         x_in = inputs[0]
-        rate = torch.unsqueeze(parameters, dim=-1)
-        rate = torch.relu(rate) + 0.01
-        v = x_in/rate + self.storage/torch.exp(rate) - x_in/(rate*torch.exp(rate))
-        outflow = x_in + self.storage - v
-        self.storage = v
-        return [outflow]
+        rate = torch.sigmoid(torch.unsqueeze(parameters, dim=-1))
+        q = x_in + self.storage - (x_in*torch.exp(rate)+rate*self.storage-x_in)/(rate*torch.exp(rate))
+        self.storage = self.storage.clone() + x_in - q
+        return [q]
+
 
 class _SnowReservoir(torch.nn.Module):
     """Initialize a snow bucket node.
@@ -948,7 +895,6 @@ class _SnowReservoir(torch.nn.Module):
         """Forward pass for a snow reservoir."""
         # Partition the in-flux.
         static_inputs, precip, tmin, tmax = inputs
-        rate = parameters
         partition = self.precip_partitioning(inputs=[precip,torch.cat([tmin, tmax, precip, static_inputs], dim=-1)], parameters=None)
 
         miss_flux = partition[0]
@@ -956,7 +902,7 @@ class _SnowReservoir(torch.nn.Module):
 
         # Outflow from leaky bucket is snowmelt.
         # The rate parameter is in (0, 1).
-        rate = torch.unsqueeze(torch.sigmoid(rate), dim=-1)       
+        rate = torch.unsqueeze(torch.sigmoid(parameters), dim=-1)       
         snowmelt = rate * self.storage
         self.storage = self.storage.clone() - snowmelt
         return [miss_flux, snowmelt]
@@ -1108,7 +1054,8 @@ class _ThresholdReservoir(torch.nn.Module):
         cfg: Config
     ):
         super(_ThresholdReservoir, self).__init__()
-        self.number_of_parameters = 1
+        #self.number_of_parameters = 1 #for euler
+        self.number_of_parameters = 2 #for analytic
 
     def initialize_bucket(
         self,
@@ -1125,7 +1072,7 @@ class _ThresholdReservoir(torch.nn.Module):
         # Initialize a tensor of zeros to use in the threshold calculation.
         self._zeros = torch.zeros_like(self.storage)
 
-    def forward(
+    def forward_euler(
         self,
         inputs: list[torch.Tensor],
         parameters: torch.Tensor
@@ -1133,7 +1080,8 @@ class _ThresholdReservoir(torch.nn.Module):
         """Forward pass for a threshold reservoir."""
         # Account for prescribed fluxes (e.g., E, P)
         x_in, x_out = inputs
-        height = torch.unsqueeze(parameters,dim=-1)
+        height = parameters + 20.0
+        height = torch.unsqueeze(height,dim=-1)
         self.storage = self.storage.clone() + x_in
         self.storage = self.storage.clone() - torch.minimum(x_out, self.storage)
         # Ensure that the bucket height parameter is positive.
@@ -1142,6 +1090,75 @@ class _ThresholdReservoir(torch.nn.Module):
         overflow = torch.maximum(self.storage - height, self._zeros)
         self.storage = self.storage.clone() - overflow
         return [overflow]
+    
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: list[torch.Tensor]
+    ) -> list[torch.Tensor]:
+        """Analytic forward pass for a threshold reservoir."""
+        # Account for prescribed fluxes (e.g., E, P)
+        p, ep = inputs
+        smax,k = parameters.T
+        k = torch.unsqueeze(k,dim=-1)
+        smax = softplus(smax)+20.0
+        smax = torch.unsqueeze(smax,dim=-1)
+        ep = torch.abs(ep)
+
+        condition = (1+torch.tanh(k*(p-ep)))/2
+        q = condition*(p-smax*torch.tanh(p/smax)*(1-(self.storage/smax)**2)/(1+(self.storage/smax)*torch.tanh(p/smax)))
+        e = (1-condition)*(p+ep*self.storage/(ep+smax/(2-self.storage/smax)))
+        self.storage = self.storage+p-q-e
+
+        #assert not torch.isnan(q).any().item()
+        #assert not torch.isnan(e).any().item()
+        #assert (q>=0).all().item()
+        #assert (e>=0).all().item()
+        #assert (self.storage>=0).all().item()
+        #assert (smax>=self.storage).all().item()
+        return [q]
+
+    def forward_analytic(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        """Previous version, leads to parameters = NaN"""
+        p, ep = inputs
+        b,c,smax,k = parameters.T
+        b = softplus(b)
+        c = torch.sigmoid(c)
+        b = torch.unsqueeze(b,dim=-1)
+        c = torch.unsqueeze(c,dim=-1)
+        k = torch.unsqueeze(k,dim=-1)
+        smax = softplus(smax)#+20.0
+        smax = torch.unsqueeze(smax,dim=-1)
+
+        condition = (1+torch.tanh(k*(p-ep)))/2
+        
+        q = condition * ((p-ep) + self.storage - smax + smax*softplus((1-(self.storage/smax))**(1/(b+1))-(p-ep)/((b+1)*smax))**(b+1))
+        e = condition*ep + (1-condition)*(p + self.storage + smax*softplus((p-ep)*(1-c)/smax + (self.storage/smax)**(1-c))**(1/(1-c)))
+        print('\n','p',p)
+        print('ep',ep)
+        print('b',b)
+        print('c',c)
+        print('k',k)
+        print('smax',smax)
+        print('q',q)
+        print('e',e)
+        print('old storage',self.storage)
+        print()
+        assert not torch.isnan(q).any().item()
+        assert not torch.isnan(e).any().item()
+        #assert (q>=0).all().item()
+        #assert (e>=0).all().item()
+        self.storage = self.storage.clone() + p - e - q
+        print('new storage',self.storage)
+        #assert (self.storage>=0).all().item()
+        #assert (smax>=self.storage).all().item()
+        print()
+
+        return [q]
 
 class _CatFunction(torch.nn.Module):
 
