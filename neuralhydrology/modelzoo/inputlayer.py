@@ -43,6 +43,7 @@ class InputLayer(nn.Module):
                 f'Must be one of: {_EMBEDDING_TYPES}.'
             )
         self.embedding_type = embedding_type
+        self.device = cfg.device
         if embedding_type == 'full_model':
             dynamic_inputs = cfg.dynamic_inputs
         elif embedding_type == 'forecast':
