@@ -753,6 +753,7 @@ class Superflex(BaseModel):
         # Estimate model parameters.
         if self.parameterization:
             parameters = self.parameterization(x_s)
+            #parameters = torch.tensor([[20.0,100.0,0.5,4.0]])
             #assert not torch.isnan(parameters).any().item()
         # Initialize storage in all model components.
         for i in range(1,len(self.layers)):
@@ -838,7 +839,6 @@ class _RoutingReservoir(torch.nn.Module):
         q = x_in + self.storage - (x_in*torch.exp(rate)+rate*self.storage-x_in)/(rate*torch.exp(rate))
         self.storage = self.storage.clone() + x_in - q
         return [q]
-
 
 class _SnowReservoir(torch.nn.Module):
     """Initialize a snow bucket node.
@@ -1109,13 +1109,6 @@ class _ThresholdReservoir(torch.nn.Module):
         q = condition*(p-smax*torch.tanh(p/smax)*(1-(self.storage/smax)**2)/(1+(self.storage/smax)*torch.tanh(p/smax)))
         e = (1-condition)*(p+ep*self.storage/(ep+smax/(2-self.storage/smax)))
         self.storage = self.storage+p-q-e
-
-        #assert not torch.isnan(q).any().item()
-        #assert not torch.isnan(e).any().item()
-        #assert (q>=0).all().item()
-        #assert (e>=0).all().item()
-        #assert (self.storage>=0).all().item()
-        #assert (smax>=self.storage).all().item()
         return [q]
 
     def forward_analytic(
@@ -1138,16 +1131,6 @@ class _ThresholdReservoir(torch.nn.Module):
         
         q = condition * ((p-ep) + self.storage - smax + smax*softplus((1-(self.storage/smax))**(1/(b+1))-(p-ep)/((b+1)*smax))**(b+1))
         e = condition*ep + (1-condition)*(p + self.storage + smax*softplus((p-ep)*(1-c)/smax + (self.storage/smax)**(1-c))**(1/(1-c)))
-        print('\n','p',p)
-        print('ep',ep)
-        print('b',b)
-        print('c',c)
-        print('k',k)
-        print('smax',smax)
-        print('q',q)
-        print('e',e)
-        print('old storage',self.storage)
-        print()
         assert not torch.isnan(q).any().item()
         assert not torch.isnan(e).any().item()
         #assert (q>=0).all().item()
@@ -1338,6 +1321,7 @@ class _Splitter(torch.nn.Module):
         """Perform forward pass through the normalized gate"""
         x = inputs[0]
         normalized_weights = torch.softmax(self.weights, dim=0)
+        #normalized_weights = torch.tensor([0.9,0.1])
         if x.shape[-1] != 1:
             raise ValueError('Splitter network can only partition a scaler.')
         outputs = normalized_weights * x
