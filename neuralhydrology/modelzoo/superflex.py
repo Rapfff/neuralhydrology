@@ -1297,7 +1297,7 @@ class _Splitter(torch.nn.Module):
         num_outputs: int
     ):
         super(_Splitter, self).__init__()
-        self.weights = torch.nn.Parameter(torch.randn(num_outputs, requires_grad=True))
+        self.weights = torch.nn.Parameter(torch.randn(num_outputs, requires_grad=True,device=cfg.device))
         self.number_of_parameters = 0
         self._reset_parameters()
 
@@ -1321,7 +1321,6 @@ class _Splitter(torch.nn.Module):
         """Perform forward pass through the normalized gate"""
         x = inputs[0]
         normalized_weights = torch.softmax(self.weights, dim=0)
-        #normalized_weights = torch.tensor([0.9,0.1])
         if x.shape[-1] != 1:
             raise ValueError('Splitter network can only partition a scaler.')
         outputs = normalized_weights * x
