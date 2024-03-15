@@ -1357,8 +1357,6 @@ class _Splitter(torch.nn.Module):
         x = inputs[0]
         weights = torch.sigmoid(parameters)
         weights.data /= torch.sum(weights.data)
-        with open("weights.txt",'a') as f:
-            f.write(str(weights)+'\n')
         if x.shape[-1] != 1:
             raise ValueError('Splitter network can only partition a scaler.')
         outputs = weights * x
