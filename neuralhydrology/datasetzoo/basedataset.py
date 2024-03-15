@@ -692,8 +692,9 @@ class BaseDataset(Dataset):
                 # Here we assume that only camels attributes are used
                 df = (df - self.scaler['camels_attr_means']) / self.scaler["camels_attr_stds"]
             else:
-                df = (df - self.scaler['attribute_means']) / self.scaler["attribute_stds"]
-
+                if len(self.basins)>1:
+                    df = (df - self.scaler['attribute_means']) / self.scaler["attribute_stds"]
+        
             # preprocess each basin feature vector as pytorch tensor
             for basin in self.basins:
                 attributes = df.loc[df.index == basin].values.flatten()

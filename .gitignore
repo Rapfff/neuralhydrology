@@ -18,4 +18,4 @@ configs/*
 data/*
 docs/build/*
 
-demo.py
+demo.*

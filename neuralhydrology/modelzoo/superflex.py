@@ -667,11 +667,10 @@ class Superflex(BaseModel):
         #    dpout = cfg.static_embedding['dropout'] if cfg.static_embedding['dropout'] is not None else 0.0
         #    activ = cfg.static_embedding['activation'] if cfg.static_embedding['activation'] is not None else "tanh"
         
-        self.parameterization = torch.nn.Sequential(
-            torch.nn.Linear(static_inputs_size, 20),
-            torch.nn.ReLU(),  # Use ReLU activation
-            torch.nn.Linear(20, total_parameters),
-            torch.nn.Sigmoid()  # Apply sigmoid activation to enforce positivity
+        self.parameterization = FC(
+            input_size=static_inputs_size,
+            hidden_sizes=[20,total_parameters],
+            dropout=0.,
         )
 
     def _execute_graph(
@@ -753,8 +752,6 @@ class Superflex(BaseModel):
         # Estimate model parameters.
         if self.parameterization:
             parameters = self.parameterization(x_s)
-            #parameters = torch.tensor([[20.0,100.0,0.5,4.0]])
-            #assert not torch.isnan(parameters).any().item()
         # Initialize storage in all model components.
         for i in range(1,len(self.layers)):
             for j in range(len(self.layers[i])):
@@ -1080,7 +1077,7 @@ class _ThresholdReservoir(torch.nn.Module):
         """Forward pass for a threshold reservoir."""
         # Account for prescribed fluxes (e.g., E, P)
         x_in, x_out = inputs
-        height = parameters + 20.0
+        height = parameters #+ 20.0
         height = torch.unsqueeze(height,dim=-1)
         self.storage = self.storage.clone() + x_in
         self.storage = self.storage.clone() - torch.minimum(x_out, self.storage)
@@ -1234,7 +1231,6 @@ class _Bias(torch.nn.Module):
         parameters: torch.Tensor
     ) -> list[torch.Tensor]:
         x_in = inputs[0]
-        #print(x_in)
         rate = torch.unsqueeze(parameters, dim=-1)
         outflow = rate + x_in
         return [outflow]

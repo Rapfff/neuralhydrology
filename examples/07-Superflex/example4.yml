@@ -1,15 +1,15 @@
 # --- Experiment configurations --------------------------------------------------------------------
 
 # experiment name, used as folder name
-experiment_name: arch6
+experiment_name: vs_sf
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
-run_dir: runs/dev
+run_dir: runs/
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: 2_basin_list.txt 
-validation_basin_file: 2_basin_list.txt 
-test_basin_file: 2_basin_list.txt 
+train_basin_file: examples/07-Superflex/1_basin.txt 
+validation_basin_file: examples/07-Superflex/1_basin.txt 
+test_basin_file: examples/07-Superflex/1_basin.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -55,7 +55,7 @@ metrics:
 # base model type [cudalstm, customlstm, ealstm, embcudalstm, mtslstm, gru, transformer]
 # (has to match the if statement in modelzoo/__init__.py)
 model: superflex
-model_description : archs/arch6.txt
+model_description : examples/07-Superflex/archs/arch1.txt
 
 # path to weight file that should be used as initial weights. Leave empty to start from random weights
 checkpoint_path:
@@ -81,9 +81,9 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.01
-  10: 0.01
-  25: 0.01
+  0: 0.1
+  10: 0.1
+  25: 0.1
 
 # Mini-batch size
 batch_size: 32
@@ -143,7 +143,7 @@ save_validation_results: True
 dataset: camels_us
 
 # Path to data set root
-data_dir: ../../data/CAMELS_US
+data_dir: data/CAMELS_US
 
 # Set to True, if train data file should be save to disk. If empty or False, train data is not saved.
 save_train_data: False
@@ -212,7 +212,7 @@ static_attributes:
 # feature.
 # Convention: If a column is used as static input, the value to use for specific sample should be in
 # same row (datetime) as the target discharge value.
-additional_feature_files: ../../data/pet.pkl
+additional_feature_files: data/pet.pkl
 
 # columns of the data frame to use as (additional) "static" inputs for each sample. Must be present in
 # the above linked additional feature files. These values will be used as static inputs, but they can evolve over time.
