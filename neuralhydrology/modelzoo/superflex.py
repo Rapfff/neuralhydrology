@@ -688,6 +688,7 @@ class Superflex(BaseModel):
             input_size=static_inputs_size,
             hidden_sizes=[20,total_parameters],
             dropout=0.,
+            activation="sigmoid"
         )
 
     def _execute_graph(
@@ -1115,7 +1116,7 @@ class _ThresholdReservoir(torch.nn.Module):
         p, ep = inputs
         smax,k = parameters.T
         k = torch.unsqueeze(k,dim=-1)
-        smax = softplus(smax)+20.0
+        smax = softplus(smax)
         smax = torch.unsqueeze(smax,dim=-1)
         ep = torch.abs(ep)
 
@@ -1356,9 +1357,10 @@ class _Splitter(torch.nn.Module):
         """Perform forward pass through the normalized gate"""
         x = inputs[0]
         weights = torch.sigmoid(parameters)
-        weights.data /= torch.sum(weights.data)
+        row_sums = weights.sum(dim=1, keepdim=True)  # Calculate row sums
+        normalized_weights = weights/row_sums
         if x.shape[-1] != 1:
             raise ValueError('Splitter network can only partition a scaler.')
-        outputs = weights * x
+        outputs = normalized_weights * x
         outputs = torch.split(outputs, 1, dim=1)
         return outputs
