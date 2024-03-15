@@ -19,6 +19,7 @@ ELEMENTS_INPUTS = {'SnowReservoir': ['static_inputs', 'precip','tmin','tmax'],
                    'Transparent':['x'],
                    'NegNode' : ['x'],
                    'BiasNode' : ['x'],
+                   'ScaleNode' : ['x'],
                    'Splitter':['x'],
                    'FullyConnected':['x']}
 ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
@@ -30,6 +31,7 @@ ELEMENTS_OUTPUTS = {'SnowReservoir': ['miss_flux', 'snowmelt'],
                    'Transparent':['output'],
                    'NegNode' : ['output'],
                    'BiasNode' : ['output'],
+                   'ScaleNode' : ['output'],
                    'Splitter'   :['output'],
                    'FullyConnected':['output']} #overrided
 ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
@@ -43,6 +45,7 @@ ELEMENTS_NB_PARMETERS = {'SnowReservoir': 1,
                          'Transparent':0,
                          'NegNode':0,
                          'BiasNode':1,
+                         'ScaleNode':1,
                          'Splitter' :0, #overrided
                          'FullyConnected':0
                          }
@@ -104,6 +107,8 @@ class _DirectedLabelledGraph:
             n = _NegNode(name,type_node)
         elif type_node == 'BiasNode':
             n = _BiasNode(name,type_node)
+        elif type_node == 'ScaleNode':
+            n = _ScaleNode(name,type_node)
         elif type_node == 'Splitter':
             n = _SplitterNode(name, type_node)
         elif type_node == 'FullyConnected':
@@ -198,12 +203,14 @@ class _DirectedLabelledGraph:
         c = -1
         nb_parameters = 0
         for n in sorted_nodes:
-            nb_parameters += n.nb_parameters
             if n.layer != c: # we know that n.layer == c+1, easy to prove
                 c+=1
                 layers.append([])
             node_idx = self.find_node(n.name)
-            layers[-1].append((n.return_instance(cfg),node_idx))
+            new_component = n.return_instance(cfg)
+            layers[-1].append((new_component,node_idx))
+            if n.type_node != "Inputs":
+                nb_parameters += new_component.number_of_parameters
 
             if n.type_node == '_FullyConnectedLayerNode':
                 nodes_outputs[node_idx] = []
@@ -408,6 +415,16 @@ class _BiasNode(_Node):
         super().__init__(name, type_node)
     def return_instance(self, cfg):
         return _Bias(cfg)
+    def add_input(self, input_data, father_node, father_data, data_size):
+        input_data = super().add_input(input_data, father_node, father_data)
+        if len(self.inputs[input_data]) == 1:
+            self.outputs_sizes[0] = data_size
+
+class _ScaleNode(_Node):
+    def __init__(self,name, type_node) -> None:
+        super().__init__(name, type_node)
+    def return_instance(self, cfg):
+        return _Scale(cfg)
     def add_input(self, input_data, father_node, father_data, data_size):
         input_data = super().add_input(input_data, father_node, father_data)
         if len(self.inputs[input_data]) == 1:
@@ -1235,6 +1252,32 @@ class _Bias(torch.nn.Module):
         outflow = rate + x_in
         return [outflow]
 
+class _Scale(torch.nn.Module):
+
+    def __init__(
+        self,
+        cfg: Config
+    ):
+        super(_Bias, self).__init__()
+        self.number_of_parameters = 1
+
+    def initialize_bucket(
+        self,
+        batch_size: int,
+        device: torch.device
+    ) -> None:
+        pass
+
+    def forward(
+        self,
+        inputs: list[torch.Tensor],
+        parameters: torch.Tensor
+    ) -> list[torch.Tensor]:
+        x_in = inputs[0]
+        rate = torch.unsqueeze(parameters, dim=-1)
+        outflow = rate * x_in
+        return [outflow]
+
 class _FullyConnected(torch.nn.Module):
     """Fully connected layer with N normalized outputs.
 
@@ -1293,9 +1336,8 @@ class _Splitter(torch.nn.Module):
         num_outputs: int
     ):
         super(_Splitter, self).__init__()
-        self.weights = torch.nn.Parameter(torch.randn(num_outputs, requires_grad=True,device=cfg.device))
-        self.number_of_parameters = 0
-        self._reset_parameters()
+        self.number_of_parameters = num_outputs
+        self.device = cfg.device
 
     def initialize_bucket(
         self,
@@ -1306,9 +1348,6 @@ class _Splitter(torch.nn.Module):
         """
         pass
 
-    def _reset_parameters(self):
-        torch.nn.init.ones_(self.weights)
-
     def forward(
         self,
         inputs: list[torch.Tensor],
@@ -1316,9 +1355,12 @@ class _Splitter(torch.nn.Module):
     ) -> list[torch.Tensor]:
         """Perform forward pass through the normalized gate"""
         x = inputs[0]
-        normalized_weights = torch.softmax(self.weights, dim=0)
+        weights = torch.sigmoid(parameters)
+        weights.data /= torch.sum(weights.data)
+        with open("weights.txt",'a') as f:
+            f.write(str(weights)+'\n')
         if x.shape[-1] != 1:
             raise ValueError('Splitter network can only partition a scaler.')
-        outputs = normalized_weights * x
+        outputs = weights * x
         outputs = torch.split(outputs, 1, dim=1)
         return outputs
