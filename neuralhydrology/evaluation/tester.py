@@ -236,7 +236,7 @@ class BaseTester(object):
                 # rescale observations
                 feature_scaler = self.scaler["xarray_feature_scale"][self.cfg.target_variables].to_array().values
                 feature_center = self.scaler["xarray_feature_center"][self.cfg.target_variables].to_array().values
-                if True:  # self.cfg.model != 'superflex':
+                if self.cfg.model != 'superflex':
                     y_freq = y[freq] * feature_scaler + feature_center
                     # rescale predictions
                     if y_hat[freq].ndim == 3 or (len(feature_scaler) == 1):

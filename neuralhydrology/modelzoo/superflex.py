@@ -896,7 +896,7 @@ class _RoutingReservoir(torch.nn.Module):
         """Forward pass for a routing reservoir."""
         # Account for the source flux.
         x_in = inputs[0]
-        rate = torch.sigmoid(torch.unsqueeze(parameters, dim=-1))
+        rate = torch.clamp(torch.unsqueeze(parameters, dim=-1), min=0.01, max=80.0)
         q = x_in + self.storage - (x_in * torch.exp(rate) + rate * self.storage - x_in) / (rate * torch.exp(rate))
         self.storage = self.storage.clone() + x_in - q
         return [q]
