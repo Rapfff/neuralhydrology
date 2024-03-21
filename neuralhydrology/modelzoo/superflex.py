@@ -758,7 +758,7 @@ class Superflex(BaseModel):
         self.parameterization = FC(input_size=static_inputs_size,
                                    hidden_sizes=[20, total_parameters],
                                    dropout=0.,
-                                   activation="sigmoid")
+                                   activation="linear")
 
     def _execute_graph(self, parameters: torch.Tensor, inputs: list[torch.Tensor]) -> torch.Tensor:
         #load the inputs
