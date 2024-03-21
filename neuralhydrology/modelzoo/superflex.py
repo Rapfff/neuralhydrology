@@ -40,8 +40,7 @@ ELEMENTS_OUTPUTS = {
 }  #overrided
 ELEMENTS_NB_PARMETERS = {
     'SnowReservoir': 1,
-    #'ThresholdReservoir': 1, for euler
-    'ThresholdReservoir': 2,  # for analytic
+    'ThresholdReservoir': 1,  # for analytic
     'RoutingReservoir': 1,
     'FluxPartition': 0,
     'LagFunction': 0,  #overrided
@@ -1081,8 +1080,7 @@ class _ThresholdReservoir(torch.nn.Module):
 
     def __init__(self, cfg: Config):
         super(_ThresholdReservoir, self).__init__()
-        #self.number_of_parameters = 1 #for euler
-        self.number_of_parameters = 2  #for analytic
+        self.number_of_parameters = 1  #for analytic
 
     def initialize_bucket(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """Initializes a bucket during runtime.
@@ -1114,10 +1112,9 @@ class _ThresholdReservoir(torch.nn.Module):
         """Analytic forward pass for a threshold reservoir."""
         # Account for prescribed fluxes (e.g., E, P)
         p, ep = inputs
-        smax, k = parameters.T
-        k = torch.unsqueeze(k, dim=-1)
-        smax = softplus(smax)
-        smax = torch.unsqueeze(smax, dim=-1)
+        smax = torch.unsqueeze(parameters, dim=-1)
+        smax = torch.clamp(smax, min=1.0, max=100.0)
+        k = torch.zeros_like(p) + 10.0
         ep = torch.abs(ep)
 
         condition = (1 + torch.tanh(k * (p - ep))) / 2
