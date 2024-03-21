@@ -13,7 +13,7 @@ test_basin_file: examples/07-Superflex/1_basin_list.txt
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
-train_end_date: '01/11/2006'
+train_end_date: '30/09/2008'
 validation_start_date: '01/10/2002'
 validation_end_date: '30/09/2004'
 test_start_date: '01/10/1998'
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 5
+validate_every: 1
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -81,15 +81,15 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.1
-  10: 0.1
-  25: 0.1
+  0: 0.01
+  10: 0.01
+  25: 0.001
 
 # Mini-batch size
-batch_size: 1
+batch_size: 32
 
 # Number of training epochs
-epochs: 3
+epochs: 20
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.1

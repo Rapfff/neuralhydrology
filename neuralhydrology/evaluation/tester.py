@@ -236,18 +236,22 @@ class BaseTester(object):
                 # rescale observations
                 feature_scaler = self.scaler["xarray_feature_scale"][self.cfg.target_variables].to_array().values
                 feature_center = self.scaler["xarray_feature_center"][self.cfg.target_variables].to_array().values
-                y_freq = y[freq] * feature_scaler + feature_center
-                # rescale predictions
-                if y_hat[freq].ndim == 3 or (len(feature_scaler) == 1):
-                    y_hat_freq = y_hat[freq] * feature_scaler + feature_center
-                elif y_hat[freq].ndim == 4:
-                    # if y_hat has 4 dim and we have multiple features we expand the dimensions for scaling
-                    feature_scaler = np.expand_dims(feature_scaler, (0, 1, 3))
-                    feature_center = np.expand_dims(feature_center, (0, 1, 3))
-                    y_hat_freq = y_hat[freq] * feature_scaler + feature_center
-                else:
-                    raise RuntimeError(f"Simulations have {y_hat[freq].ndim} dimension. Only 3 and 4 are supported.")
-
+                if True:  # self.cfg.model != 'superflex':
+                    y_freq = y[freq] * feature_scaler + feature_center
+                    # rescale predictions
+                    if y_hat[freq].ndim == 3 or (len(feature_scaler) == 1):
+                        y_hat_freq = y_hat[freq] * feature_scaler + feature_center
+                    elif y_hat[freq].ndim == 4:
+                        # if y_hat has 4 dim and we have multiple features we expand the dimensions for scaling
+                        feature_scaler = np.expand_dims(feature_scaler, (0, 1, 3))
+                        feature_center = np.expand_dims(feature_center, (0, 1, 3))
+                        y_hat_freq = y_hat[freq] * feature_scaler + feature_center
+                    else:
+                        raise RuntimeError(
+                            f"Simulations have {y_hat[freq].ndim} dimension. Only 3 and 4 are supported.")
+                else:  # not needed if model == superflex (in this case we haven't normalized)
+                    y_freq = y[freq]
+                    y_hat_freq = y_hat[freq]
                 # Create data_vars dictionary for the xarray.Dataset
                 data_vars = self._create_xarray_data_vars(y_hat_freq, y_freq)
 
