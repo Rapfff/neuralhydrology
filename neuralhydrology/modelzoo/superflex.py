@@ -2,7 +2,6 @@ from typing import Tuple
 import re
 
 import torch
-from torch.nn.functional import softplus
 from neuralhydrology.modelzoo.basemodel import BaseModel
 from neuralhydrology.utils.config import Config
 from neuralhydrology.modelzoo.fc import FC
@@ -40,7 +39,7 @@ ELEMENTS_OUTPUTS = {
 }  #overrided
 ELEMENTS_NB_PARMETERS = {
     'SnowReservoir': 1,
-    'ThresholdReservoir': 1,  # for analytic
+    'ThresholdReservoir': 1,
     'RoutingReservoir': 1,
     'FluxPartition': 0,
     'LagFunction': 0,  #overrided
@@ -53,6 +52,11 @@ ELEMENTS_NB_PARMETERS = {
     'Splitter': 0,  #overrided
     'FullyConnected': 0
 }
+
+
+def scale_output(x, min_val, max_val):
+    scaled_x = x * (max_val - min_val) + min_val
+    return scaled_x
 
 
 class _DirectedLabelledGraph:
@@ -755,10 +759,14 @@ class Superflex(BaseModel):
         #    dpout = cfg.static_embedding['dropout'] if cfg.static_embedding['dropout'] is not None else 0.0
         #    activ = cfg.static_embedding['activation'] if cfg.static_embedding['activation'] is not None else "tanh"
 
-        self.parameterization = FC(input_size=static_inputs_size,
-                                   hidden_sizes=[20, total_parameters],
-                                   dropout=0.,
-                                   activation="linear")
+        #self.parameterization = FC(input_size=static_inputs_size,
+        #                           hidden_sizes=[20, total_parameters],
+        #                           dropout=0.,
+        #                           activation="sigmoid")
+        self.parameterization = torch.nn.Sequential(torch.nn.Linear(in_features=static_inputs_size, out_features=20),
+                                                    torch.nn.Sigmoid(), torch.nn.Dropout(p=0.0),
+                                                    torch.nn.Linear(in_features=20, out_features=total_parameters),
+                                                    torch.nn.Sigmoid())
 
     def _execute_graph(self, parameters: torch.Tensor, inputs: list[torch.Tensor]) -> torch.Tensor:
         #load the inputs
@@ -896,7 +904,7 @@ class _RoutingReservoir(torch.nn.Module):
         """Forward pass for a routing reservoir."""
         # Account for the source flux.
         x_in = inputs[0]
-        rate = torch.clamp(torch.unsqueeze(parameters, dim=-1), min=0.01, max=80.0)
+        rate = scale_output(torch.unsqueeze(parameters, dim=-1), min_val=0.01, max_val=50.0)
         q = x_in + self.storage - (x_in * torch.exp(rate) + rate * self.storage - x_in) / (rate * torch.exp(rate))
         self.storage = self.storage.clone() + x_in - q
         return [q]
@@ -1080,7 +1088,7 @@ class _ThresholdReservoir(torch.nn.Module):
 
     def __init__(self, cfg: Config):
         super(_ThresholdReservoir, self).__init__()
-        self.number_of_parameters = 1  #for analytic
+        self.number_of_parameters = 1
 
     def initialize_bucket(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """Initializes a bucket during runtime.
@@ -1112,46 +1120,14 @@ class _ThresholdReservoir(torch.nn.Module):
         """Analytic forward pass for a threshold reservoir."""
         # Account for prescribed fluxes (e.g., E, P)
         p, ep = inputs
-        smax = torch.unsqueeze(parameters, dim=-1)
-        smax = torch.clamp(smax, min=1.0, max=100.0)
-        k = torch.zeros_like(p) + 10.0
+        smax = scale_output(torch.unsqueeze(parameters, dim=-1), min_val=1.0, max_val=500.0)
         ep = torch.abs(ep)
-
+        k = torch.zeros_like(p) + 20.0
         condition = (1 + torch.tanh(k * (p - ep))) / 2
         q = condition * (p - smax * torch.tanh(p / smax) * (1 - (self.storage / smax)**2) /
                          (1 + (self.storage / smax) * torch.tanh(p / smax)))
         e = (1 - condition) * (p + ep * self.storage / (ep + smax / (2 - self.storage / smax)))
         self.storage = self.storage + p - q - e
-        return [q]
-
-    def forward_analytic(self, inputs: list[torch.Tensor], parameters: torch.Tensor) -> list[torch.Tensor]:
-        """Previous version, leads to parameters = NaN"""
-        p, ep = inputs
-        b, c, smax, k = parameters.T
-        b = softplus(b)
-        c = torch.sigmoid(c)
-        b = torch.unsqueeze(b, dim=-1)
-        c = torch.unsqueeze(c, dim=-1)
-        k = torch.unsqueeze(k, dim=-1)
-        smax = softplus(smax)  #+20.0
-        smax = torch.unsqueeze(smax, dim=-1)
-
-        condition = (1 + torch.tanh(k * (p - ep))) / 2
-
-        q = condition * ((p - ep) + self.storage - smax + smax * softplus((1 - (self.storage / smax))**(1 / (b + 1)) -
-                                                                          (p - ep) / ((b + 1) * smax))**(b + 1))
-        e = condition * ep + (1 - condition) * (p + self.storage + smax * softplus(
-            (p - ep) * (1 - c) / smax + (self.storage / smax)**(1 - c))**(1 / (1 - c)))
-        assert not torch.isnan(q).any().item()
-        assert not torch.isnan(e).any().item()
-        #assert (q>=0).all().item()
-        #assert (e>=0).all().item()
-        self.storage = self.storage.clone() + p - e - q
-        print('new storage', self.storage)
-        #assert (self.storage>=0).all().item()
-        #assert (smax>=self.storage).all().item()
-        print()
-
         return [q]
 
 
@@ -1277,7 +1253,7 @@ class _Splitter(torch.nn.Module):
     def forward(self, inputs: list[torch.Tensor], parameters: torch.Tensor) -> list[torch.Tensor]:
         """Perform forward pass through the normalized gate"""
         x = inputs[0]
-        weights = torch.sigmoid(parameters)
+        weights = parameters
         row_sums = weights.sum(dim=1, keepdim=True)  # Calculate row sums
         normalized_weights = weights / row_sums
         if x.shape[-1] != 1:

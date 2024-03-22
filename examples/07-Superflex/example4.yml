@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: examples/07-Superflex/1_basin_list.txt 
-validation_basin_file: examples/07-Superflex/1_basin_list.txt 
-test_basin_file: examples/07-Superflex/1_basin_list.txt 
+train_basin_file: examples/07-Superflex/6_basins_list.txt 
+validation_basin_file: examples/07-Superflex/6_basins_list.txt 
+test_basin_file: examples/07-Superflex/6_basins_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 1
+validate_every: 5
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -89,7 +89,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 20
+epochs: 25
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.1
@@ -182,15 +182,15 @@ static_attributes:
 - elev_mean
 - slope_mean
 # - area_gages2
-# - frac_forest
+- frac_forest
 # - lai_max
 # - lai_diff
 # - gvf_max
 # - gvf_diff
 # - soil_depth_pelletier
 # - soil_depth_statsgo
-# - soil_porosity
-# - soil_conductivity
+- soil_porosity
+- soil_conductivity
 # - max_water_content
 # - sand_frac
 # - silt_frac
@@ -199,12 +199,12 @@ static_attributes:
 # - geol_permeability
 # - p_mean
 # - pet_mean
-# - aridity
+- aridity
 # - frac_snow
-# - high_prec_freq
-# - high_prec_dur
-# - low_prec_freq
-# - low_prec_dur
+- high_prec_freq
+- high_prec_dur
+- low_prec_freq
+- low_prec_dur
 
 
 # Path to pickle file(s) containing additional data. Each pickle file must contain a dictionary
