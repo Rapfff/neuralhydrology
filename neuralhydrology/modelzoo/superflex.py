@@ -9,7 +9,6 @@ from neuralhydrology.modelzoo.inputlayer import InputLayer
 
 ELEMENTS_INPUTS = {
     'SnowReservoir': ['static_inputs', 'precip', 'tmin', 'tmax'],
-    #'ThresholdReservoir': ['x_in','x_out'],
     'ThresholdReservoir': ['x_in', 'pe'],
     'RoutingReservoir': ['x_in'],
     'FluxPartition': ['flux', 'x'],
@@ -36,7 +35,7 @@ ELEMENTS_OUTPUTS = {
     'ScaleNode': ['output'],
     'Splitter': ['output'],
     'FullyConnected': ['output']
-}  #overrided
+}
 ELEMENTS_NB_PARMETERS = {
     'SnowReservoir': 1,
     'ThresholdReservoir': 1,
@@ -765,6 +764,8 @@ class Superflex(BaseModel):
         #                           activation="sigmoid")
         self.parameterization = torch.nn.Sequential(torch.nn.Linear(in_features=static_inputs_size, out_features=20),
                                                     torch.nn.Sigmoid(), torch.nn.Dropout(p=0.0),
+                                                    torch.nn.Linear(in_features=20, out_features=20),
+                                                    torch.nn.Sigmoid(),
                                                     torch.nn.Linear(in_features=20, out_features=total_parameters),
                                                     torch.nn.Sigmoid())
 
