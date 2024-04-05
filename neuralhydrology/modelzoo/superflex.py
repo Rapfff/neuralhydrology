@@ -782,7 +782,6 @@ class Superflex(BaseModel):
                 node_inputs = []
                 # we first deal with the inputs:
                 # for each input of this node
-
                 for k in self.nodes_inputs[node_idx]:
                     node_inputs.append([])
                     # add all sources for this input in node_inputs[-1]
@@ -1098,24 +1097,6 @@ class _ThresholdReservoir(torch.nn.Module):
         """
         # We can do this however we want, but for now let's just start with every bucket being empty.
         self.storage = torch.zeros([batch_size, 1], device=device)
-
-        # Initialize a tensor of zeros to use in the threshold calculation.
-        self._zeros = torch.zeros_like(self.storage)
-
-    def forward_euler(self, inputs: list[torch.Tensor], parameters: torch.Tensor) -> list[torch.Tensor]:
-        """Forward pass for a threshold reservoir."""
-        # Account for prescribed fluxes (e.g., E, P)
-        x_in, x_out = inputs
-        height = parameters  #+ 20.0
-        height = torch.unsqueeze(height, dim=-1)
-        self.storage = self.storage.clone() + x_in
-        self.storage = self.storage.clone() - torch.minimum(x_out, self.storage)
-        # Ensure that the bucket height parameter is positive.
-        height = torch.abs(height)
-        # Calculate bucket overflow.
-        overflow = torch.maximum(self.storage - height, self._zeros)
-        self.storage = self.storage.clone() - overflow
-        return [overflow]
 
     def forward(self, inputs: list[torch.Tensor], parameters: list[torch.Tensor]) -> list[torch.Tensor]:
         """Analytic forward pass for a threshold reservoir."""

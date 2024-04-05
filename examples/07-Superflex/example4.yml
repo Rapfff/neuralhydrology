@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: examples/07-Superflex/6_basins_list.txt 
-validation_basin_file: examples/07-Superflex/6_basins_list.txt 
-test_basin_file: examples/07-Superflex/6_basins_list.txt 
+train_basin_file: examples/07-Superflex/1_basin_list.txt 
+validation_basin_file: examples/07-Superflex/1_basin_list.txt 
+test_basin_file: examples/07-Superflex/1_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 3
+validate_every: 2
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -89,7 +89,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 15
+epochs: 10
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.0
@@ -131,7 +131,7 @@ log_tensorboard: True
 log_n_figures: -1
 
 # Save model weights every n epochs
-save_weights_every: 3
+save_weights_every: 2
 
 # Store the results of the validation to disk
 save_validation_results: True
@@ -205,9 +205,9 @@ static_attributes:
 # - high_prec_dur
 # - low_prec_freq
 # - low_prec_dur
-- baseflow_index
-- high_q_freq
-- aridity
+#- baseflow_index
+#- high_q_freq
+#- aridity
 
 # Path to pickle file(s) containing additional data. Each pickle file must contain a dictionary
 # with one key for each basin and the value is a time indexed data frame, where each column is a 
@@ -222,5 +222,5 @@ additional_feature_files: data/pet.pkl
 evolving_attributes:
 
 # whether to use basin id one hot encoding as (additional) static input
-use_basin_id_encoding: False
+use_basin_id_encoding: True
 
