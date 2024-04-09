@@ -7,9 +7,9 @@ experiment_name:
 run_dir: runs/
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: examples/07-Superflex/1_basin_list.txt 
-validation_basin_file: examples/07-Superflex/1_basin_list.txt 
-test_basin_file: examples/07-Superflex/1_basin_list.txt 
+train_basin_file: examples/07-Superflex/6_basins_list.txt 
+validation_basin_file: examples/07-Superflex/6_basins_list.txt 
+test_basin_file: examples/07-Superflex/6_basins_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
@@ -28,7 +28,7 @@ per_basin_test_periods_file:
 seed:
 
 # which GPU (id) to use [in format of cuda:0, cuda:1 etc, or cpu or None]
-device: cpu
+device: cuda:0
 
 # --- Validation configuration ---------------------------------------------------------------------
 
