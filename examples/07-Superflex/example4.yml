@@ -13,9 +13,9 @@ test_basin_file: examples/07-Superflex/1_basin_list.txt
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
-train_end_date: '30/09/2008'
+train_end_date: '30/09/2010'
 validation_start_date: '01/10/2002'
-validation_end_date: '30/09/2004'
+validation_end_date: '30/09/2006'
 test_start_date: '01/10/1998'
 test_end_date: '30/09/2000'
 
@@ -33,7 +33,7 @@ device: cpu
 # --- Validation configuration ---------------------------------------------------------------------
 
 # specify after how many epochs to perform validation
-validate_every: 2
+validate_every: 1
 
 # specify how many random basins to use for validation
 validate_n_random_basins: -1
@@ -81,7 +81,7 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.01
+  0: 0.001
   10: 0.005
   20: 0.001
 
@@ -89,7 +89,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 10
+epochs: 20
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.0
@@ -205,9 +205,9 @@ static_attributes:
 # - high_prec_dur
 # - low_prec_freq
 # - low_prec_dur
-#- baseflow_index
-#- high_q_freq
-#- aridity
+- baseflow_index
+- high_q_freq
+- aridity
 
 # Path to pickle file(s) containing additional data. Each pickle file must contain a dictionary
 # with one key for each basin and the value is a time indexed data frame, where each column is a 
@@ -222,5 +222,5 @@ additional_feature_files: data/pet.pkl
 evolving_attributes:
 
 # whether to use basin id one hot encoding as (additional) static input
-use_basin_id_encoding: True
+use_basin_id_encoding: False
 

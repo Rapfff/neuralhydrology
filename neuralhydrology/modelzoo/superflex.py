@@ -885,21 +885,6 @@ class _RoutingReservoir(torch.nn.Module):
         # We can do this however we want, but for now let's just start with every bucket being empty.
         self.storage = torch.zeros([batch_size, 1], device=device)
 
-    def forward_explicit_euler(self, inputs: list[torch.Tensor], parameters: torch.Tensor) -> list[torch.Tensor]:
-        """Forward pass for a routing reservoir."""
-        # Account for the source flux.
-        x_in = inputs[0]
-        rate = torch.unsqueeze(parameters, dim=-1)
-        self.storage = self.storage.clone() + x_in
-
-        # Ensure that the bucket rate parameter is in (0, 1).
-        rate = torch.sigmoid(rate)
-
-        # Outflow from leaky bucket.
-        outflow = rate * self.storage
-        self.storage = self.storage - outflow
-        return [outflow]
-
     def forward(self, inputs: list[torch.Tensor], parameters: torch.Tensor) -> list[torch.Tensor]:
         """Forward pass for a routing reservoir."""
         # Account for the source flux.
