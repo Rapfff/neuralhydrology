@@ -738,9 +738,11 @@ class Superflex(BaseModel):
         with open(cfg.model_description, 'r') as input_file:
             self.layers, self.nodes_inputs, self.nodes_outputs, total_parameters, self.inputs = parser(
                 input_file, cfg, static_inputs_size)
-        # self.layers: list of elements (SnowReservoir, Splitter, LagFunction,etc ... instances)
+        # self.layers: list of tuples containing:
+        #                                     first an element (SnowReservoir, Splitter, LagFunction, etc ... instance)
+        #                                     second the id of this element (an int)
         # self.nodes_inputs:  list of list of list of tuples containing two integers
-        #                     self.nodes_inputs[i][j] = [(3,0),(4,1)] => the the jth inputs of the ith nodes is a
+        #                     self.nodes_inputs[i][j] = [(3,0),(4,1)] => the jth inputs of the ith nodes is a
         #                                                               combination of the 3rd node first input and
         #                                                               4th node 2nd input.
         # self.nodes_outputs: list of list of None
@@ -843,6 +845,9 @@ class Superflex(BaseModel):
         # Estimate model parameters.
         if self.parameterization:
             parameters = self.parameterization(x_s)
+            #parameters = torch.tensor(
+            #    [[229.813553858017, 1 - 0.171815917951091, 0.171815917951091, 0.0506228965673652, 3.63827741846042]],
+            #    requires_grad=True)
         # Initialize storage in all model components.
         for i in range(1, len(self.layers)):
             for j in range(len(self.layers[i])):
@@ -890,6 +895,7 @@ class _RoutingReservoir(torch.nn.Module):
         # Account for the source flux.
         x_in = inputs[0]
         rate = scale_output(torch.unsqueeze(parameters, dim=-1), min_val=0.01, max_val=50.0)
+        #rate = torch.unsqueeze(parameters, dim=-1)
         q = x_in + self.storage - (x_in * torch.exp(rate) + rate * self.storage - x_in) / (rate * torch.exp(rate))
         self.storage = self.storage.clone() + x_in - q
         return [q]
@@ -1088,12 +1094,18 @@ class _ThresholdReservoir(torch.nn.Module):
         # Account for prescribed fluxes (e.g., E, P)
         p, ep = inputs
         smax = scale_output(torch.unsqueeze(parameters, dim=-1), min_val=1.0, max_val=500.0)
-        ep = torch.abs(ep)
-        k = torch.zeros_like(p) + 20.0
+        #smax = torch.unsqueeze(parameters, dim=-1)
+        #ep = torch.abs(ep)
+        k = torch.zeros_like(p) + 100.0
+        # what if p == ep == 0.0 ?
         condition = (1 + torch.tanh(k * (p - ep))) / 2
-        q = condition * (p - smax * torch.tanh(p / smax) * (1 - (self.storage / smax)**2) /
-                         (1 + (self.storage / smax) * torch.tanh(p / smax)))
-        e = (1 - condition) * (p + ep * self.storage / (ep + smax / (2 - self.storage / smax)))
+        e_ir = condition * ep + (1.0 - condition) * p
+        ep = ep - e_ir
+        p = p - e_ir
+        q = p - smax * (1.0 - (self.storage / smax)**2) * torch.tanh(
+            p / smax) / (1.0 + self.storage / smax * torch.tanh(p / smax))
+        e = (self.storage * (2.0 - self.storage / smax) *
+             torch.tanh(ep / smax)) / (1.0 + (1.0 - self.storage / smax) * torch.tanh(ep / smax))
         self.storage = self.storage + p - q - e
         return [q]
 
