@@ -4,7 +4,7 @@
 experiment_name:
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
-run_dir: runs/08175000
+run_dir: runs/01333000
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
 train_basin_file: examples/07-Superflex/1_basin_list.txt 
@@ -81,7 +81,7 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.01
+  0: 0.001
   10: 0.005
   20: 0.001
 
@@ -89,7 +89,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 7
+epochs: 10
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.0
