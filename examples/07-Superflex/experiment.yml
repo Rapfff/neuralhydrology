@@ -4,20 +4,20 @@
 experiment_name:
 
 # place to store run directory (if empty runs are stored in code_dir/runs/)
-run_dir: runs/01333000
+run_dir: runs/big_exp
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: examples/07-Superflex/1_basin_list.txt 
-validation_basin_file: examples/07-Superflex/1_basin_list.txt 
-test_basin_file: examples/07-Superflex/1_basin_list.txt 
+train_basin_file: examples/07-Superflex/20_basin_list.txt 
+validation_basin_file: examples/07-Superflex/20_basin_list.txt 
+test_basin_file: examples/07-Superflex/20_basin_list.txt 
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
-train_start_date: '01/10/2006'
-train_end_date: '30/09/2008'
-validation_start_date: '01/10/2006'
-validation_end_date: '30/09/2008'
-test_start_date: '01/10/1998'
-test_end_date: '30/09/2000'
+train_start_date: '01/01/2000'
+train_end_date: '31/12/2007'
+validation_start_date: '01/01/2008'
+validation_end_date: '31/12/2009'
+test_start_date: '01/01/1998'
+test_end_date: '31/12/1999'
 
 # if you want to use different (continuous or split) periods per basin (and period) define path to pickle files here.
 per_basin_train_periods_file:
@@ -47,8 +47,6 @@ cache_validation_data: True
 metrics:
 - NSE
 - KGE
-- Alpha-NSE
-- Beta-NSE
 
 # --- Model configuration --------------------------------------------------------------------------
 
@@ -81,7 +79,7 @@ regularization:
 
 # specify learning rates to use starting at specific epochs (0 is the initial learning rate)
 learning_rate:
-  0: 0.001
+  0: 0.005
   10: 0.005
   20: 0.001
 
@@ -122,13 +120,13 @@ seq_length: 365
 num_workers: 1
 
 # Log the training loss every n steps
-log_interval: 2
+log_interval: 1
 
 # If true, writes logging results into tensorboard file
 log_tensorboard: True
 
 # If a value and greater than 0, logs n random basins as figures during validation
-log_n_figures: -1
+log_n_figures: 0
 
 # Save model weights every n epochs
 save_weights_every: 1
