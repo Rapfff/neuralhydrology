@@ -14,8 +14,8 @@ test_basin_file: examples/07-Superflex/1_basin_list.txt
 # training, validation and test time periods (format = 'dd/mm/yyyy')
 train_start_date: '01/10/2006'
 train_end_date: '30/09/2008'
-validation_start_date: '01/10/2006'
-validation_end_date: '30/09/2008'
+validation_start_date: '01/10/2002'
+validation_end_date: '30/09/2004'
 test_start_date: '01/10/1998'
 test_end_date: '30/09/2000'
 
@@ -25,10 +25,10 @@ per_basin_validation_periods_file:
 per_basin_test_periods_file:
 
 # fixed seed, leave empty to use a random seed
-seed:
+seed: 2027500
 
 # which GPU (id) to use [in format of cuda:0, cuda:1 etc, or cpu or None]
-device: cpu
+device: cuda:0
 
 # --- Validation configuration ---------------------------------------------------------------------
 
@@ -89,7 +89,7 @@ learning_rate:
 batch_size: 32
 
 # Number of training epochs
-epochs: 10
+epochs: 5
 
 # adds noise with given std to the labels during training. Leave empty or set to 0 if not used.
 target_noise_std: 0.0
